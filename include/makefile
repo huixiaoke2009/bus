@@ -10,7 +10,7 @@ SOURCES = $(wildcard *.c) $(wildcard *.cc) $(wildcard *.cpp) $(wildcard *.proto)
 OBJS = $(patsubst %.proto,%.pb.o,$(SOURCES)) 
 OBJS += $(patsubst %.cpp,%.o,$(patsubst %.cc,%.o,$(patsubst %.c,%.o,$(SOURCES))))
 
-TARGETS = router.a
+TARGETS = bus.a
 
 all:$(TARGETS)
 
