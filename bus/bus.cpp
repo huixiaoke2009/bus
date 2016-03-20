@@ -14,8 +14,14 @@
 #include "bus_header.h"
 #include "cmd.h"
 
-const unsigned int LISTEN_SOCK_CPOS_MIN = 100;    //100-199的ConnPos用于监听的Socket
-const unsigned int LISTEN_SOCK_CPOS_MAX = 199;
+const unsigned int LISTEN_SOCK_CPOS_MIN = 100;    //100-149的ConnPos用于监听的Socket
+const unsigned int LISTEN_SOCK_CPOS_MAX = 149;
+
+const unsigned int LISTEN_UDP_CPOS_MIN = 150;    //150-199的ConnPos用于监听的Socket
+const unsigned int LISTEN_UDP_CPOS_MAX = 199;
+
+const unsigned int CLUSTER_SOCK_CPOS_MIN = 200;   //200-299的ConnPos用于与其他cluster连接
+const unsigned int CLUSTER_SOCK_CPOS_MAX = 299;
 
 const unsigned int CLIENT_SOCK_CPOS_MIN = 500;    //500以上才是客户端连接上来的Socket
 
@@ -61,7 +67,6 @@ static void SigHandler(int iSigNo)
 
 CConnInfo::CConnInfo(unsigned int ConnPos, int SockID, const struct sockaddr_in *pRemoteAddr, const struct sockaddr_in *pLocalAddr)
 {
-
     m_ConnPos = ConnPos;
     m_SockID = SockID;
     m_RemoteAddr = *pRemoteAddr;
@@ -326,8 +331,8 @@ CBus::CBus()
     m_EpollFD = -1;
     m_ClusterNum = 0;
     m_ConnPosCnt = 0;
+    m_ClusterPosCnt = 0;
     m_PosConnMap.clear();
-    m_itrCurCheckConn = m_PosConnMap.begin();
     m_pProcessBuff = NULL;
 }
 
@@ -506,15 +511,21 @@ int CBus::Init(const char *pConfFile)
         m_ClusterInfo[iCurListNum].ClusterID = ClusterID;
         m_ClusterInfo[iCurListNum].SocketID = -1;
         m_ClusterInfo[iCurListNum].ConnPos = 0;
-        m_ClusterInfo[iCurListNum].pConnInfo = NULL;
-        
+       
         // 自己的配置，用于启用监听端口
         if(ClusterID == GetClusterID())
         {
-            Ret = Listen(CurIPStr, CurPort);
+            Ret = ListenTcp(CurIPStr, CurPort);
             if(Ret != 0)
             {
-                printf("socket listen failed\n");
+                printf("socket listen failed, %s, %d\n", CurIPStr, CurPort);
+                return -1;
+            }
+            
+            Ret = ListenUdp(CurIPStr, CurPort);
+            if(Ret != 0)
+            {
+                printf("socket listen failed, %s, %d\n", CurIPStr, CurPort);
                 return -1;
             }
         }
@@ -723,9 +734,6 @@ int CBus::Run()
             //没有任何事件
         }
 
-        // 对连接进行检查扫描
-        CheckConn();
-        
         // 检查链接
         time_t NowTime = time(NULL);
         if(NowTime - LastTime >= 10)
@@ -787,22 +795,18 @@ int CBus::ConnectCluster(unsigned int ClusterID)
     {
         if(m_ClusterInfo[i].ClusterID == ClusterID)
         {
-            if(m_ClusterInfo[i].SocketID != -1 || m_ClusterInfo[i].ConnPos != 0 || m_ClusterInfo[i].pConnInfo != NULL)
+            if(m_ClusterInfo[i].SocketID != -1 || m_ClusterInfo[i].ConnPos != 0)
             {
                 epoll_ctl(m_EpollFD, EPOLL_CTL_DEL, m_ClusterInfo[i].SocketID, NULL);
                 close(m_ClusterInfo[i].SocketID);
                 std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(m_ClusterInfo[i].ConnPos);
                 if (iter != m_PosConnMap.end())
                 {
-                    ReleaseConn(iter);
+                    m_PosConnMap.erase(iter);
                 }
-                
-                // 安全起见，再删除一次
-                SAFE_DELETE(m_ClusterInfo[i].pConnInfo);
-                
+
                 m_ClusterInfo[i].SocketID = -1;
                 m_ClusterInfo[i].ConnPos = 0;
-                m_ClusterInfo[i].pConnInfo = NULL;
             }
             
             int SocketID = socket(AF_INET, SOCK_STREAM, 0);
@@ -881,19 +885,16 @@ int CBus::ConnectCluster(unsigned int ClusterID)
             }
 
             //经过一定的周期，可能产生的ConnPos正在使用中
-            m_ConnPosCnt++;
+            m_ClusterPosCnt++;
             unsigned int CurConnPos;
-            if (m_ConnPosCnt < CLIENT_SOCK_CPOS_MIN)
+            if (m_ClusterPosCnt < CLUSTER_SOCK_CPOS_MIN || m_ClusterPosCnt > CLUSTER_SOCK_CPOS_MAX)
             {
-                CurConnPos = CLIENT_SOCK_CPOS_MIN+1;
-                m_ConnPosCnt = CurConnPos;
+                m_ClusterPosCnt = CLUSTER_SOCK_CPOS_MIN+1;
             }
-            else
-            {
-                CurConnPos = m_ConnPosCnt;
-            }
+       
+            CurConnPos = m_ClusterPosCnt;
 
-            //检索当前的map，防止出现冲突的ConnPos
+            //检索当前的map，防止出现冲突的ConnPos，满的时候会进入死循环
             while (true)
             {
                 if (m_PosConnMap.find(CurConnPos) == m_PosConnMap.end())
@@ -903,9 +904,9 @@ int CBus::ConnectCluster(unsigned int ClusterID)
 
                 CurConnPos++;
 
-                if (CurConnPos < CLIENT_SOCK_CPOS_MIN)
+                if (CurConnPos < CLUSTER_SOCK_CPOS_MIN || CurConnPos > CLUSTER_SOCK_CPOS_MAX)
                 {
-                    CurConnPos = CLIENT_SOCK_CPOS_MIN + 1;
+                    CurConnPos = CLUSTER_SOCK_CPOS_MIN + 1;
                 }
             }
             
@@ -933,7 +934,6 @@ int CBus::ConnectCluster(unsigned int ClusterID)
             
             m_ClusterInfo[i].SocketID = SocketID;
             m_ClusterInfo[i].ConnPos = CurConnPos;
-            m_ClusterInfo[i].pConnInfo = pCurConnInfo;
             
             break;
         }
@@ -954,22 +954,19 @@ int CBus::DisconnetCluster(unsigned int ClusterID)
     {
         if(m_ClusterInfo[i].ClusterID == ClusterID && ClusterID != GetClusterID())
         {
-            if(m_ClusterInfo[i].SocketID != -1 || m_ClusterInfo[i].ConnPos != 0 || m_ClusterInfo[i].pConnInfo != NULL)
+            if(m_ClusterInfo[i].SocketID != -1 || m_ClusterInfo[i].ConnPos != 0)
             {
+                // 这几步执行多一次也没关系
                 epoll_ctl(m_EpollFD, EPOLL_CTL_DEL, m_ClusterInfo[i].SocketID, NULL);
                 close(m_ClusterInfo[i].SocketID);
                 std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(m_ClusterInfo[i].ConnPos);
                 if (iter != m_PosConnMap.end())
                 {
-                    ReleaseConn(iter);
+                    m_PosConnMap.erase(iter);
                 }
-                
-                // 安全起见，再删除一次
-                SAFE_DELETE(m_ClusterInfo[i].pConnInfo);
-                
+               
                 m_ClusterInfo[i].SocketID = -1;
                 m_ClusterInfo[i].ConnPos = 0;
-                m_ClusterInfo[i].pConnInfo = NULL;
                 
                 XF_LOG_INFO(0 , 0, "DisconnetCluster:%d", ClusterID);
             }
@@ -991,7 +988,7 @@ void CBus::CheckCluster()
             continue;
         }
         
-        if(m_ClusterInfo[i].SocketID == -1 || m_ClusterInfo[i].ConnPos == 0 || m_ClusterInfo[i].pConnInfo == NULL)
+        if(m_ClusterInfo[i].SocketID == -1 || m_ClusterInfo[i].ConnPos == 0)
         {
             ConnectCluster(m_ClusterInfo[i].ClusterID);
         }
@@ -1003,8 +1000,7 @@ void CBus::CheckCluster()
 }
 
 
-
-int CBus::Listen(const char* pAddr, int Port)
+int CBus::ListenTcp(const char* pAddr, int Port)
 {
     unsigned int LocalIP = inet_addr(pAddr);
     int LocalPort = Port;
@@ -1066,7 +1062,73 @@ int CBus::Listen(const char* pAddr, int Port)
         return -1;
     }
 
-    printf("INFO:service listen ok, ip=%s, port=%d\n", inet_ntoa(*(struct in_addr *)(&addr.sin_addr.s_addr)), ntohs(addr.sin_port));
+    printf("INFO:service tcp listen ok, ip=%s, port=%d\n", inet_ntoa(*(struct in_addr *)(&addr.sin_addr.s_addr)), ntohs(addr.sin_port));
+    
+    return 0;
+}
+
+
+int CBus::ListenUdp(const char* pAddr, int Port)
+{
+    unsigned int LocalIP = inet_addr(pAddr);
+    int LocalPort = Port;
+
+    int CurListenSockID = socket(AF_INET, SOCK_DGRAM, 0);
+
+    if(-1 == CurListenSockID)
+    {
+        printf("ERR:create listen socket failed|%d|%s\n", errno, strerror(errno));
+        return -1;
+    }
+
+    struct sockaddr_in addr;
+    memset(&addr, 0x0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = LocalIP;
+    addr.sin_port = htons(LocalPort);
+
+    if(-1 == TEMP_FAILURE_RETRY(::bind(CurListenSockID, (struct sockaddr*)&addr, sizeof(addr))))
+    {
+        printf("ERR:bind failed|%s|%u|%d|%s\n", CStrTool::IPString(addr.sin_addr.s_addr), ntohs(addr.sin_port), errno, strerror(errno));
+        return -1;
+    }
+    
+    struct timeval tv_out;
+    tv_out.tv_sec = 2;
+    tv_out.tv_usec = 0;
+    
+    if(-1 == setsockopt(CurListenSockID, SOL_SOCKET, SO_RCVTIMEO, &tv_out, sizeof(tv_out)))
+    {
+        printf("ERR:setsockopt failed!\n");
+        return -1;
+    }
+
+    struct epoll_event ev;
+    ev.events = EPOLLIN;
+    ev.data.u32 = LISTEN_UDP_CPOS_MIN;
+
+    if(0 != epoll_ctl(m_EpollFD, EPOLL_CTL_ADD, CurListenSockID, &ev))
+    {
+        printf("ERR:epoll_ctl failed|%d|%s\n", errno, strerror(errno));
+        return -1;
+    }
+    
+    // 下面这一段只是为了方便epoll监听管理，不能用CConnInfo里面的send和recieve接口
+    struct sockaddr_in remote_addr;
+    memset(&remote_addr, 0x0, sizeof(remote_addr));
+
+    CConnInfo *pCurConnInfo = new CConnInfo(LISTEN_UDP_CPOS_MIN, CurListenSockID, &remote_addr, &addr);
+
+    if(m_PosConnMap.insert(std::pair<unsigned int, CConnInfo*>(LISTEN_UDP_CPOS_MIN, pCurConnInfo)).second == false)
+    {
+        printf("conn map add failed\n");
+        epoll_ctl(m_EpollFD, EPOLL_CTL_DEL, CurListenSockID, NULL);
+        close(CurListenSockID);
+        SAFE_DELETE(pCurConnInfo);
+        return -1;
+    }
+
+    printf("INFO:service udp listen ok, ip=%s, port=%d\n", inet_ntoa(*(struct in_addr *)(&addr.sin_addr.s_addr)), ntohs(addr.sin_port));
     
     return 0;
 }
@@ -1180,51 +1242,28 @@ int CBus::AcceptConn(int ConnPos)
 }
 
 
-void CBus::CheckConn()
-{
-    //每次只检查一个链接是否超时
-    if (m_itrCurCheckConn == m_PosConnMap.end())
-    {
-        m_itrCurCheckConn = m_PosConnMap.begin();
-        return;
-    }
-
-    if ((m_itrCurCheckConn->first >= LISTEN_SOCK_CPOS_MIN) && (m_itrCurCheckConn->first <= LISTEN_SOCK_CPOS_MAX))
-    {
-        m_itrCurCheckConn++;
-        return;
-    }
-    
-    // 判断是否超时
-    time_t TineNow = time(NULL);
-    time_t TimeDiff = TineNow - m_itrCurCheckConn->second->GetLastActTime();
-    if (TimeDiff > 1800)
-    {
-        XF_LOG_WARN(0, 0, "conn timeout|%s|%d|%u|%s", m_itrCurCheckConn->second->RemoteAddrStr(), m_itrCurCheckConn->second->RemotePort(), m_itrCurCheckConn->first, CStrTool::TimeString(m_itrCurCheckConn->second->GetLastActTime()));
-        std::map<unsigned int, CConnInfo*>::iterator itrTmpConn = m_itrCurCheckConn;
-        ReleaseConn(itrTmpConn);
-    }
-    else
-    {
-        m_itrCurCheckConn++;
-    }
-
-    return;
-}
-
-
 void CBus::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInfoMap)
 {
+    unsigned int CurConnPos = itrConnInfoMap->first;
+    
     CConnInfo *pCurConnInfo = itrConnInfoMap->second;
     epoll_ctl(m_EpollFD, EPOLL_CTL_DEL, pCurConnInfo->GetSockID(), NULL);
     close(pCurConnInfo->GetSockID());
-    if (itrConnInfoMap == m_itrCurCheckConn)
-    {
-        m_itrCurCheckConn++;
-    }
 
     XF_LOG_INFO(0, 0, "DEL_POS_CONN_MAP|%d", itrConnInfoMap->first);
     m_PosConnMap.erase(itrConnInfoMap);
     
     SAFE_DELETE(pCurConnInfo);
+    
+    if (CurConnPos > CLUSTER_SOCK_CPOS_MIN && CurConnPos < CLUSTER_SOCK_CPOS_MAX)
+    {
+        for(int i = 0; i < XY_MAX_CLUSTER_NUM && i < m_ClusterNum; i++)
+        {
+            if(m_ClusterInfo[i].ConnPos == CurConnPos)
+            {
+                DisconnetCluster(m_ClusterInfo[i].ClusterID);
+                break;
+            }
+        }
+    }
 }

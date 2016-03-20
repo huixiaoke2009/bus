@@ -96,8 +96,7 @@ typedef struct tagClusterInfo
     short ClusterPort;
     unsigned int ClusterID;
     int SocketID;
-    int ConnPos;
-    CConnInfo* pConnInfo;
+    unsigned int ConnPos;
     
     tagClusterInfo()
     {
@@ -106,7 +105,6 @@ typedef struct tagClusterInfo
         ClusterID = 0;
         SocketID = -1;
         ConnPos = 0;
-        pConnInfo = NULL;
     }
 }ClusterInfo;
 
@@ -122,9 +120,9 @@ class CBus
         unsigned int GetClusterID(){return m_ClusterID;}
 
     private:
-        int Listen(const char* pAddr, int Port);
+        int ListenTcp(const char* pAddr, int Port);
+        int ListenUdp(const char* pAddr, int Port);
         int AcceptConn(int ConnPos);
-        void CheckConn();
         void ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
         
     private:
@@ -141,14 +139,14 @@ class CBus
         
         // 生成cpos的计数
         unsigned int m_ConnPosCnt;
+        unsigned int m_ClusterPosCnt;
         
         //接收缓冲区
         char *m_pProcessBuff;
         int m_ClusterNum;
         
         std::map<unsigned int, CConnInfo*> m_PosConnMap;
-        std::map<unsigned int, CConnInfo*>::iterator m_itrCurCheckConn;
-        
+      
         ClusterInfo m_ClusterInfo[XY_MAX_CLUSTER_NUM];
         
         // SvrID与Cluster的关联
