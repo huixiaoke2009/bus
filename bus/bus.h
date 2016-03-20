@@ -108,6 +108,22 @@ typedef struct tagClusterInfo
     }
 }ClusterInfo;
 
+typedef struct tagServerInfo
+{
+    unsigned int ClusterID;
+    int QueueKey;
+    int QueueSize;
+    mmlib::CShmQueue* pQueue;
+    
+    tagServerInfo()
+    {
+        ClusterID = 0;
+        QueueKey = 0;
+        QueueSize = 0;
+        pQueue = NULL;
+    }
+}ServerInfo;
+
 
 class CBus
 {
@@ -122,17 +138,21 @@ class CBus
     private:
         int ListenTcp(const char* pAddr, int Port);
         int ListenUdp(const char* pAddr, int Port);
-        int AcceptConn(int ConnPos);
+        int AcceptConn(unsigned int ConnPos);
+        int ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
+        int ForwardMsg(const char *pCurBuffPos, int RecvLen);
         void ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
+        void RecvHelloMessage(unsigned int ConnPos);
+        void SendHelloMessage();
+        void SendHeartBeetMessage();
         
+        int Send2ClusterByMsg(const ClusterInfo& Info, unsigned int CmdID, const google::protobuf::Message &Rsp);
+        int Send2Cluster(const ClusterInfo& Info, const char *pSendBuff, int SendBuffLen);
     private:
         // 与其他cluster相连使用
         int ConnectCluster(unsigned int ClusterID);
         int DisconnetCluster(unsigned int ClusterID);
-        void CheckCluster();
-    
-        int ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
-    
+        
     private:
         int m_EpollFD;
         unsigned int m_ClusterID;
@@ -150,7 +170,7 @@ class CBus
         ClusterInfo m_ClusterInfo[XY_MAX_CLUSTER_NUM];
         
         // SvrID与Cluster的关联
-        std::map<unsigned int, int> m_mapSvrID;
+        std::map<unsigned int, ServerInfo> m_mapSvrID;
         
         mmlib::CShmQueue m_ClusterQueue;
 };

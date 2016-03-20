@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "bus.h"
+#include "app_proc.h"
 
 int main(int argc, char *argv[])
 {
@@ -9,19 +9,19 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    daemon(1, 1);
+    //daemon(1, 1);
 
     int Ret = 0;
-    CBus Bus;
+    CApp App;
 
-    Ret = Bus.Init(argv[1]);
+    Ret = App.Init(argv[1]);
     if (Ret != 0)
     {
         printf("ERR:proc init failed, ret=%d\n", Ret);
         return -1;
     }
 
-    Ret = Bus.Run();
+    Ret = App.Run();
 
     return Ret;
 }
