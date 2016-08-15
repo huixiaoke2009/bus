@@ -164,6 +164,10 @@ class CBus
         //接收缓冲区
         char *m_pProcessBuff;
         int m_ClusterNum;
+
+        //HelloTime
+        int m_UDPHelloTime;
+        int m_TCPHelloTime;
         
         std::map<unsigned int, CConnInfo*> m_PosConnMap;
       

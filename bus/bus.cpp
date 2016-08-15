@@ -14,10 +14,10 @@
 #include "bus_header.h"
 #include "cmd.h"
 
-const unsigned int LISTEN_SOCK_CPOS_MIN = 100;    //100-149的ConnPos用于监听的Socket
+const unsigned int LISTEN_SOCK_CPOS_MIN = 100;    //100-149的ConnPos用于监听TCP的Socket
 const unsigned int LISTEN_SOCK_CPOS_MAX = 149;
 
-const unsigned int LISTEN_UDP_CPOS_MIN = 150;    //150-199的ConnPos用于监听的Socket
+const unsigned int LISTEN_UDP_CPOS_MIN = 150;    //150-199的ConnPos用于监听UDP的Socket
 const unsigned int LISTEN_UDP_CPOS_MAX = 199;
 
 const unsigned int CLUSTER_SOCK_CPOS_MIN = 200;   //200-299的ConnPos用于与其他cluster连接
@@ -332,6 +332,8 @@ CBus::CBus()
     m_ClusterNum = 0;
     m_ConnPosCnt = 0;
     m_ClusterPosCnt = 0;
+    m_UDPHelloTime = 0;
+    m_TCPHelloTime = 0;
     m_PosConnMap.clear();
     m_pProcessBuff = NULL;
 }
@@ -384,6 +386,9 @@ int CBus::Init(const char *pConfFile)
     if (IniFile.IsValid())
     {
         IniFile.GetInt("BUS", "ClusterID", 0, (int*)&m_ClusterID);
+        IniFile.GetInt("BUS", "UDPHelloTime", 0, (int*)&m_UDPHelloTime);
+        IniFile.GetInt("BUS", "TCPHelloTime", 0, (int*)&m_TCPHelloTime);
+        
         IniFile.GetString("BUS", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
         
         IniFile.GetString("LOG", "ModuleName", "bus", ModuleName, sizeof(ModuleName));
@@ -844,14 +849,14 @@ int CBus::Run()
 
         // 向对方的UDP端口发送hello数据包
         time_t NowTime = time(NULL);
-        if(NowTime - LastHelloTime >= 5)
+        if(NowTime - LastHelloTime >= m_UDPHelloTime)
         {
             LastHelloTime = NowTime;
             SendHelloMessage();
         }
         
         // 向每个cluster发送心跳包，保持TCP连接活跃
-        if(NowTime - LastHeartBeetTime >= 60)
+        if(NowTime - LastHeartBeetTime >= m_TCPHelloTime)
         {
             LastHeartBeetTime = NowTime;
             SendHeartBeetMessage();
@@ -1184,13 +1189,17 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
             {
                 XF_LOG_WARN(0, 0, "InQueue failed, %d|%0x|%d", Ret, Info.QueueKey, Info.QueueSize);
                 // 实在没办法，只能清空整条通道
-                Info.pQueue->Clean();
+                //Info.pQueue->Clean();
                 return -1;
             }
             else
             {
                 XF_LOG_TRACE(0, 0, "InQueue success, %d|%0x|%d", Ret, Info.QueueKey, Info.QueueSize);
             }
+        }
+        else
+        {
+            XF_LOG_WARN(0, 0, "Queqe is null, %d|%d|%d", Info.ClusterID, Info.QueueKey, Info.QueueSize);
         }
     }
     else
@@ -1271,13 +1280,17 @@ int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
             {
                 XF_LOG_WARN(0, 0, "InQueue failed, %d|%0x|%d", Ret, Info.QueueKey, Info.QueueSize);
                 // 实在没办法，只能清空整条通道
-                Info.pQueue->Clean();
+                //Info.pQueue->Clean();
                 return -1;
             }
             else
             {
                 XF_LOG_TRACE(0, 0, "InQueue success, %d|%0x|%d", Ret, Info.QueueKey, Info.QueueSize);
             }
+        }
+        else
+        {
+            XF_LOG_WARN(0, 0, "Queqe is null, %d|%d|%d", Info.ClusterID, Info.QueueKey, Info.QueueSize);
         }
     }
     else
