@@ -106,6 +106,7 @@ typedef struct tagClusterInfo
         SocketID = -1;
         ConnPos = 0;
     }
+    
 }ClusterInfo;
 
 typedef struct tagServerInfo
@@ -163,18 +164,15 @@ class CBus
         
         //接收缓冲区
         char *m_pProcessBuff;
-        int m_ClusterNum;
 
         //HelloTime
         int m_UDPHelloTime;
         int m_TCPHelloTime;
         
         std::map<unsigned int, CConnInfo*> m_PosConnMap;
-      
-        ClusterInfo m_ClusterInfo[XY_MAX_CLUSTER_NUM];
-        
-        // SvrID与Cluster的关联
-        std::map<unsigned int, ServerInfo> m_mapSvrID;
+
+        std::map<unsigned int, ClusterInfo> m_mapClusterInfo;
+        std::map<unsigned int, ServerInfo> m_mapSvrInfo;
         
         mmlib::CShmQueue m_ClusterQueue;
 };

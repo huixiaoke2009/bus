@@ -1,6 +1,6 @@
 start()
 {
-    /mnt/hgfs/workspace/code/github/bus/logsvr/logsvr /mnt/hgfs/workspace/code/github/bus/logsvr/conf/logsvr.ini
+    ../logsvr ../conf/logsvr.ini
 }
 
 stop()

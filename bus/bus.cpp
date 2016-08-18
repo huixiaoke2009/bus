@@ -20,10 +20,10 @@ const unsigned int LISTEN_SOCK_CPOS_MAX = 149;
 const unsigned int LISTEN_UDP_CPOS_MIN = 150;    //150-199的ConnPos用于监听UDP的Socket
 const unsigned int LISTEN_UDP_CPOS_MAX = 199;
 
-const unsigned int CLUSTER_SOCK_CPOS_MIN = 200;   //200-299的ConnPos用于与其他cluster连接
-const unsigned int CLUSTER_SOCK_CPOS_MAX = 299;
+const unsigned int CLUSTER_SOCK_CPOS_MIN = 200000;   //200000-299999的ConnPos用于主动与其他cluster连接
+const unsigned int CLUSTER_SOCK_CPOS_MAX = 299999;
 
-const unsigned int CLIENT_SOCK_CPOS_MIN = 500;    //500以上才是客户端连接上来的Socket
+const unsigned int CLIENT_SOCK_CPOS_MIN = 300000;    //300000以上是其它cluster连接上来的Socket
 
 const unsigned int MAX_EPOLL_RET_EVENTS = 1024;
 
@@ -329,7 +329,6 @@ CBus::CBus()
 {
     m_ClusterID = 0;
     m_EpollFD = -1;
-    m_ClusterNum = 0;
     m_ConnPosCnt = 0;
     m_ClusterPosCnt = 0;
     m_UDPHelloTime = 0;
@@ -478,12 +477,6 @@ int CBus::Init(const char *pConfFile)
     vector<unsigned int> vctClusterID;
     for(char *pszSecVal = aszClusterList; (pszOneClusterID = strtok(pszSecVal, ",")) != NULL; pszSecVal=NULL)
     {
-        if(iCurListNum >= XY_MAX_CLUSTER_NUM)
-        {
-            printf("iCurListNum = %d is not valid\n", iCurListNum);
-            return -1;
-        }
-        
         //去掉空格
         while ((*pszOneClusterID) == ' ')
         {
@@ -503,7 +496,6 @@ int CBus::Init(const char *pConfFile)
         return -1;
     }
     
-    m_ClusterNum = iCurListNum;
     
     for(unsigned int index = 0; index < vctClusterID.size(); index++)
     {
@@ -529,13 +521,19 @@ int CBus::Init(const char *pConfFile)
             printf("%s/ClusterID is not valid, %d, %d\n", strCluster.c_str(), tmpClusterID, ClusterID);
             return -1;
         }
-        
-        m_ClusterInfo[index].ClusterIP = inet_addr(CurIPStr);
-        m_ClusterInfo[index].ClusterPort = CurPort;
-        m_ClusterInfo[index].ClusterID = ClusterID;
-        m_ClusterInfo[index].SocketID = -1;
-        m_ClusterInfo[index].ConnPos = 0;
-       
+
+        ClusterInfo CInfo;
+        CInfo.ClusterIP = inet_addr(CurIPStr);
+        CInfo.ClusterPort = CurPort;
+        CInfo.ClusterID = ClusterID;
+        CInfo.SocketID = -1;
+        CInfo.ConnPos = 0;
+        if(m_mapClusterInfo.insert(std::pair<unsigned int, ClusterInfo>(ClusterID, CInfo)).second == false)
+        {
+            printf("m_mapClusterInfo insert failed\n");
+            return -1;
+        }
+
         // 自己的配置，用于启用监听端口
         if(ClusterID == GetClusterID())
         {
@@ -611,18 +609,18 @@ int CBus::Init(const char *pConfFile)
                 Info.QueueSize = QueueSize;
                 Info.pQueue = pQueue;
                 
-                if(m_mapSvrID.insert(std::pair<unsigned int, ServerInfo>(ServerID, Info)).second == false)
+                if(m_mapSvrInfo.insert(std::pair<unsigned int, ServerInfo>(ServerID, Info)).second == false)
                 {
-                    printf("m_mapSvrID insert failed\n");
+                    printf("m_mapSvrInfo insert failed\n");
                     delete(pQueue);
                     return -1;
                 }
             }
             else
             {
-                if(m_mapSvrID.insert(std::pair<int, ServerInfo>(ServerID, Info)).second == false)
+                if(m_mapSvrInfo.insert(std::pair<unsigned int, ServerInfo>(ServerID, Info)).second == false)
                 {
-                    printf("m_mapSvrID insert failed\n");
+                    printf("m_mapSvrInfo insert failed\n");
                     return -1;
                 }
             }
@@ -1150,14 +1148,14 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
         bus::HeartbeatMsg CurHeartbeatReq;
         if (!CurHeartbeatReq.ParseFromArray(pCurBuffPos+HeaderLen, PkgLen-HeaderLen))
         {
-            XF_LOG_WARN(0, 0, "Parse Pkg failed, CmdID=%d", CurHeader.CmdID);
+            XF_LOG_WARN(0, 0, "Parse Pkg failed, CmdID=%0x", CurHeader.CmdID);
             return -1;
         }
         
         unsigned int ClusterID = CurHeartbeatReq.clusterid();
         
         XF_LOG_TRACE(0, 0, "Recieve Heartbeat from ClusterID %d", ClusterID);
-            
+
         return PkgLen;
     }
     
@@ -1167,10 +1165,10 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
     unsigned int SrcID = CurHeader.SrcID;
     unsigned int CmdID = CurHeader.CmdID;
     
-    map<unsigned int, ServerInfo>::iterator iter = m_mapSvrID.find(DstID);
-    if(iter == m_mapSvrID.end())
+    map<unsigned int, ServerInfo>::iterator iter = m_mapSvrInfo.find(DstID);
+    if(iter == m_mapSvrInfo.end())
     {
-        XF_LOG_WARN(0, 0, "Unknow DstID %d, %d|%d", DstID, SrcID, CmdID);
+        XF_LOG_WARN(0, 0, "Unknow DstID %d, %d|%0x", DstID, SrcID, CmdID);
         return -1;
     }
     
@@ -1199,11 +1197,13 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
         }
         else
         {
-            XF_LOG_WARN(0, 0, "Queqe is null, %d|%d|%d", Info.ClusterID, Info.QueueKey, Info.QueueSize);
+            XF_LOG_WARN(0, 0, "Queqe is null, %d|%0x|%d", Info.ClusterID, Info.QueueKey, Info.QueueSize);
         }
     }
     else
     {
+        // 这里需要进行转发吗?
+        /*
         for(int i = 0; i < m_ClusterNum && i < XY_MAX_CLUSTER_NUM; i++)
         {
             if(m_ClusterInfo[i].ClusterID == Info.ClusterID)
@@ -1218,6 +1218,8 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
                 break;
             }
         }
+        */
+        XF_LOG_WARN(0, 0, "unbelievable, DstID=%d, SrcID=%d, CmdID=%0x", DstID, SrcID, CmdID);
     }
     
     return PkgLen;
@@ -1229,6 +1231,7 @@ int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
     int Ret = 0;
     
     BusHeader CurHeader;
+    
     int HeaderLen = CurHeader.GetHeaderLen();
     // 接受到的数据不够包头长度
     if(RecvLen < HeaderLen)
@@ -1258,10 +1261,10 @@ int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
     unsigned int SrcID = CurHeader.SrcID;
     unsigned int CmdID = CurHeader.CmdID;
     
-    map<unsigned int, ServerInfo>::iterator iter = m_mapSvrID.find(DstID);
-    if(iter == m_mapSvrID.end())
+    map<unsigned int, ServerInfo>::iterator iter = m_mapSvrInfo.find(DstID);
+    if(iter == m_mapSvrInfo.end())
     {
-        XF_LOG_WARN(0, 0, "Unknow DstID %d, %d|%d", DstID, SrcID, CmdID);
+        XF_LOG_WARN(0, 0, "Unknow DstID %d, %d|%0x", DstID, SrcID, CmdID);
         return -1;
     }
     
@@ -1290,23 +1293,19 @@ int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
         }
         else
         {
-            XF_LOG_WARN(0, 0, "Queqe is null, %d|%d|%d", Info.ClusterID, Info.QueueKey, Info.QueueSize);
+            XF_LOG_WARN(0, 0, "Queqe is null, %d|%0x|%d", Info.ClusterID, Info.QueueKey, Info.QueueSize);
         }
     }
     else
     {
-        for(int i = 0; i < m_ClusterNum && i < XY_MAX_CLUSTER_NUM; i++)
+        map<unsigned int, ClusterInfo>::iterator iter2 = m_mapClusterInfo.find(Info.ClusterID);
+        if(iter2 != m_mapClusterInfo.end())
         {
-            if(m_ClusterInfo[i].ClusterID == Info.ClusterID)
+            Ret = Send2Cluster(iter2->second, pCurBuffPos, RecvLen);
+            if(Ret != 0)
             {
-                Ret = Send2Cluster(m_ClusterInfo[i], pCurBuffPos, RecvLen);
-                if(Ret != 0)
-                {
-                    XF_LOG_WARN(0, 0, "Send2Cluster failed, %d", Info.ClusterID);
-                    return -1;
-                }
-                
-                break;
+                XF_LOG_WARN(0, 0, "Send2Cluster failed, %d", Info.ClusterID);
+                return -1;
             }
         }
     }
@@ -1329,11 +1328,12 @@ void CBus::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInfo
     
     if (CurConnPos > CLUSTER_SOCK_CPOS_MIN && CurConnPos < CLUSTER_SOCK_CPOS_MAX)
     {
-        for(int i = 0; i < XY_MAX_CLUSTER_NUM && i < m_ClusterNum; i++)
+        map<unsigned int, ClusterInfo>::iterator iter = m_mapClusterInfo.begin();
+        for(; iter != m_mapClusterInfo.end(); iter++)
         {
-            if(m_ClusterInfo[i].ConnPos == CurConnPos)
+            if(iter->second.ConnPos == CurConnPos)
             {
-                DisconnetCluster(m_ClusterInfo[i].ClusterID);
+                DisconnetCluster(iter->second.ClusterID);
                 break;
             }
         }
@@ -1380,16 +1380,13 @@ void CBus::RecvHelloMessage(unsigned int ConnPos)
     
     XF_LOG_TRACE(0, 0, "Recv hello message from cluster:%d", ClusterID);
     
-    for(int i = 0; i < m_ClusterNum && i < XY_MAX_CLUSTER_NUM; i++)
+    map<unsigned int, ClusterInfo>::iterator iter2 = m_mapClusterInfo.find(ClusterID);
+    if (ClusterID != GetClusterID() && iter2 != m_mapClusterInfo.end())
     {
-        if (m_ClusterInfo[i].ClusterID == ClusterID && ClusterID != GetClusterID())
+        //检查是否需要连接
+        if(iter2->second.SocketID == -1 || iter2->second.ConnPos == 0)
         {
-            //检查是否需要连接
-            if(m_ClusterInfo[i].SocketID == -1 || m_ClusterInfo[i].ConnPos == 0)
-            {
-                ConnectCluster(ClusterID);
-                break;
-            }
+            ConnectCluster(ClusterID);
         }
     }
     
@@ -1399,9 +1396,10 @@ void CBus::RecvHelloMessage(unsigned int ConnPos)
 
 void CBus::SendHelloMessage()
 {
-    for(int i = 0; i < m_ClusterNum && i < XY_MAX_CLUSTER_NUM; i++)
+    map<unsigned int, ClusterInfo>::iterator iter = m_mapClusterInfo.begin();
+    for(; iter != m_mapClusterInfo.end(); iter++)
     {
-        if(m_ClusterInfo[i].ClusterID == GetClusterID())
+        if(iter->second.ClusterID == GetClusterID())
         {
             continue;
         }
@@ -1441,22 +1439,23 @@ void CBus::SendHelloMessage()
         struct sockaddr_in addr;
         memset(&addr, 0x0, sizeof(addr));
         addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = m_ClusterInfo[i].ClusterIP;
-        addr.sin_port = htons(m_ClusterInfo[i].ClusterPort);
+        addr.sin_addr.s_addr = iter->second.ClusterIP;
+        addr.sin_port = htons(iter->second.ClusterPort);
         
         sendto(CurSockID, buf, CurHeader.PkgLen, 0, (sockaddr*)&addr, sizeof(addr));
         
         close(CurSockID);
         
-        XF_LOG_TRACE(0, 0, "Send hello message to cluster:%d", m_ClusterInfo[i].ClusterID);
+        XF_LOG_TRACE(0, 0, "Send hello message to cluster:%d", iter->second.ClusterID);
     }
 }
 
 void CBus::SendHeartBeetMessage()
 {
-    for(int i = 0; i < m_ClusterNum && i < XY_MAX_CLUSTER_NUM; i++)
+    map<unsigned int, ClusterInfo>::iterator iter = m_mapClusterInfo.begin();
+    for(; iter != m_mapClusterInfo.end(); iter++)
     {
-        if(m_ClusterInfo[i].ClusterID == GetClusterID())
+        if(iter->second.ClusterID == GetClusterID())
         {
             continue;
         }
@@ -1464,7 +1463,9 @@ void CBus::SendHeartBeetMessage()
         bus::HeartbeatMsg Msg;
         Msg.set_clusterid(GetClusterID());
         
-        Send2ClusterByMsg(m_ClusterInfo[i], Cmd_Heartbeat, Msg);
+        Send2ClusterByMsg(iter->second, Cmd_Heartbeat, Msg);
+
+        XF_LOG_TRACE(0, 0, "Send Heartbeat to ClusterID:%d", iter->second.ClusterID); 
     }
     
 }
@@ -1560,110 +1561,107 @@ int CBus::ConnectCluster(unsigned int ClusterID)
     {
         return 0;
     }
-    
-    for(int i = 0; i < XY_MAX_CLUSTER_NUM && i < m_ClusterNum; i++)
+
+    map<unsigned int, ClusterInfo>::iterator iter = m_mapClusterInfo.find(ClusterID);
+
+    if(iter != m_mapClusterInfo.end())
     {
-        if(m_ClusterInfo[i].ClusterID == ClusterID)
+        if(iter->second.SocketID != -1 || iter->second.ConnPos != 0)
         {
-            if(m_ClusterInfo[i].SocketID != -1 || m_ClusterInfo[i].ConnPos != 0)
+            epoll_ctl(m_EpollFD, EPOLL_CTL_DEL, iter->second.SocketID, NULL);
+            close(iter->second.SocketID);
+            std::map<unsigned int, CConnInfo*>::iterator iter2 = m_PosConnMap.find(iter->second.ConnPos);
+            if (iter2 != m_PosConnMap.end())
             {
-                epoll_ctl(m_EpollFD, EPOLL_CTL_DEL, m_ClusterInfo[i].SocketID, NULL);
-                close(m_ClusterInfo[i].SocketID);
-                std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(m_ClusterInfo[i].ConnPos);
-                if (iter != m_PosConnMap.end())
-                {
-                    m_PosConnMap.erase(iter);
-                }
-
-                m_ClusterInfo[i].SocketID = -1;
-                m_ClusterInfo[i].ConnPos = 0;
-            }
-            
-            int SocketID = socket(AF_INET, SOCK_STREAM, 0);
-            if (-1 == SocketID)
-            {
-                XF_LOG_WARN(0, 0,"create socket faile|%d|%s", errno, strerror(errno));
-                return -1;
-            }
-            
-            struct sockaddr_in stSockAddr;
-            stSockAddr.sin_family = AF_INET;
-            stSockAddr.sin_port = htons(m_ClusterInfo[i].ClusterPort);
-            stSockAddr.sin_addr.s_addr = m_ClusterInfo[i].ClusterIP;
-
-            if (-1 == connect(SocketID, (struct sockaddr *)&stSockAddr, sizeof(stSockAddr)))
-            {
-                // 进入这个分支表示超时或者出错
-                close(SocketID);
-                XF_LOG_WARN(0, 0, "select return error|%d", ClusterID);
-                return -1;
-            }
-            
-            XF_LOG_INFO(0 , 0, "ConnetCluster:%d", ClusterID);
-            
-            struct sockaddr_in local_addr;
-            socklen_t local_len = sizeof(local_addr);
-            memset(&local_addr, 0x0, sizeof(local_addr));
-            int Ret = getsockname(SocketID, (struct sockaddr *)&local_addr, &local_len);
-            if (Ret != 0)
-            {
-                XF_LOG_WARN(0, 0, "getsockname failed");
-                return -1;
+                m_PosConnMap.erase(iter2);
             }
 
-            //经过一定的周期，可能产生的ConnPos正在使用中
-            m_ClusterPosCnt++;
-            unsigned int CurConnPos;
-            if (m_ClusterPosCnt < CLUSTER_SOCK_CPOS_MIN || m_ClusterPosCnt > CLUSTER_SOCK_CPOS_MAX)
-            {
-                m_ClusterPosCnt = CLUSTER_SOCK_CPOS_MIN+1;
-            }
-       
-            CurConnPos = m_ClusterPosCnt;
-
-            //检索当前的map，防止出现冲突的ConnPos，满的时候会进入死循环
-            while (true)
-            {
-                if (m_PosConnMap.find(CurConnPos) == m_PosConnMap.end())
-                {
-                    break;
-                }
-
-                CurConnPos++;
-
-                if (CurConnPos < CLUSTER_SOCK_CPOS_MIN || CurConnPos > CLUSTER_SOCK_CPOS_MAX)
-                {
-                    CurConnPos = CLUSTER_SOCK_CPOS_MIN + 1;
-                }
-            }
-            
-            struct epoll_event ev;
-            ev.events = EPOLLIN | EPOLLERR | EPOLLHUP;
-            ev.data.u32 = CurConnPos;
-
-            if(epoll_ctl(m_EpollFD, EPOLL_CTL_ADD, SocketID, &ev) != 0)
-            {
-                XF_LOG_WARN(0, 0, "epoll add failed|%d|%s", errno, strerror(errno));
-                close(SocketID);
-                return -1;
-            }
-            
-            CConnInfo *pCurConnInfo = new CConnInfo(CurConnPos, SocketID, &stSockAddr, &local_addr);
-
-            if(m_PosConnMap.insert(std::pair<unsigned int, CConnInfo*>(CurConnPos, pCurConnInfo)).second == false)
-            {
-                XF_LOG_WARN(0, 0, "conn map add failed");
-                epoll_ctl(m_EpollFD, EPOLL_CTL_DEL, SocketID, NULL);
-                close(SocketID);
-                SAFE_DELETE(pCurConnInfo);
-                return -1;
-            }
-            
-            m_ClusterInfo[i].SocketID = SocketID;
-            m_ClusterInfo[i].ConnPos = CurConnPos;
-            
-            break;
+            iter->second.SocketID = -1;
+            iter->second.ConnPos = 0;
         }
+        
+        int SocketID = socket(AF_INET, SOCK_STREAM, 0);
+        if (-1 == SocketID)
+        {
+            XF_LOG_WARN(0, 0,"create socket faile|%d|%s", errno, strerror(errno));
+            return -1;
+        }
+        
+        struct sockaddr_in stSockAddr;
+        stSockAddr.sin_family = AF_INET;
+        stSockAddr.sin_port = htons(iter->second.ClusterPort);
+        stSockAddr.sin_addr.s_addr = iter->second.ClusterIP;
+
+        if (-1 == connect(SocketID, (struct sockaddr *)&stSockAddr, sizeof(stSockAddr)))
+        {
+            // 进入这个分支表示超时或者出错
+            close(SocketID);
+            XF_LOG_WARN(0, 0, "select return error|%d", ClusterID);
+            return -1;
+        }
+        
+        XF_LOG_INFO(0 , 0, "ConnetCluster:%d", ClusterID);
+        
+        struct sockaddr_in local_addr;
+        socklen_t local_len = sizeof(local_addr);
+        memset(&local_addr, 0x0, sizeof(local_addr));
+        int Ret = getsockname(SocketID, (struct sockaddr *)&local_addr, &local_len);
+        if (Ret != 0)
+        {
+            XF_LOG_WARN(0, 0, "getsockname failed");
+            return -1;
+        }
+
+        //经过一定的周期，可能产生的ConnPos正在使用中
+        m_ClusterPosCnt++;
+        unsigned int CurConnPos;
+        if (m_ClusterPosCnt < CLUSTER_SOCK_CPOS_MIN || m_ClusterPosCnt > CLUSTER_SOCK_CPOS_MAX)
+        {
+            m_ClusterPosCnt = CLUSTER_SOCK_CPOS_MIN+1;
+        }
+   
+        CurConnPos = m_ClusterPosCnt;
+
+        //检索当前的map，防止出现冲突的ConnPos，满的时候会进入死循环
+        while (true)
+        {
+            if (m_PosConnMap.find(CurConnPos) == m_PosConnMap.end())
+            {
+                break;
+            }
+
+            CurConnPos++;
+
+            if (CurConnPos < CLUSTER_SOCK_CPOS_MIN || CurConnPos > CLUSTER_SOCK_CPOS_MAX)
+            {
+                CurConnPos = CLUSTER_SOCK_CPOS_MIN + 1;
+            }
+        }
+        
+        struct epoll_event ev;
+        ev.events = EPOLLIN | EPOLLERR | EPOLLHUP;
+        ev.data.u32 = CurConnPos;
+
+        if(epoll_ctl(m_EpollFD, EPOLL_CTL_ADD, SocketID, &ev) != 0)
+        {
+            XF_LOG_WARN(0, 0, "epoll add failed|%d|%s", errno, strerror(errno));
+            close(SocketID);
+            return -1;
+        }
+        
+        CConnInfo *pCurConnInfo = new CConnInfo(CurConnPos, SocketID, &stSockAddr, &local_addr);
+
+        if(m_PosConnMap.insert(std::pair<unsigned int, CConnInfo*>(CurConnPos, pCurConnInfo)).second == false)
+        {
+            XF_LOG_WARN(0, 0, "conn map add failed");
+            epoll_ctl(m_EpollFD, EPOLL_CTL_DEL, SocketID, NULL);
+            close(SocketID);
+            SAFE_DELETE(pCurConnInfo);
+            return -1;
+        }
+        
+        iter->second.SocketID = SocketID;
+        iter->second.ConnPos = CurConnPos;
     }
     
     return 0;
@@ -1676,29 +1674,25 @@ int CBus::DisconnetCluster(unsigned int ClusterID)
     {
         return 0;
     }
-    
-    for(int i = 0; i < XY_MAX_CLUSTER_NUM && i < m_ClusterNum; i++)
+
+    map<unsigned int, ClusterInfo>::iterator iter = m_mapClusterInfo.find(ClusterID);
+    if(iter != m_mapClusterInfo.end())
     {
-        if(m_ClusterInfo[i].ClusterID == ClusterID && ClusterID != GetClusterID())
+        if(iter->second.SocketID != -1 || iter->second.ConnPos != 0)
         {
-            if(m_ClusterInfo[i].SocketID != -1 || m_ClusterInfo[i].ConnPos != 0)
+            // 这几步执行多一次也没关系
+            epoll_ctl(m_EpollFD, EPOLL_CTL_DEL, iter->second.SocketID, NULL);
+            close(iter->second.SocketID);
+            std::map<unsigned int, CConnInfo*>::iterator iter2 = m_PosConnMap.find(iter->second.ConnPos);
+            if (iter2 != m_PosConnMap.end())
             {
-                // 这几步执行多一次也没关系
-                epoll_ctl(m_EpollFD, EPOLL_CTL_DEL, m_ClusterInfo[i].SocketID, NULL);
-                close(m_ClusterInfo[i].SocketID);
-                std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(m_ClusterInfo[i].ConnPos);
-                if (iter != m_PosConnMap.end())
-                {
-                    m_PosConnMap.erase(iter);
-                }
-               
-                m_ClusterInfo[i].SocketID = -1;
-                m_ClusterInfo[i].ConnPos = 0;
-                
-                XF_LOG_INFO(0 , 0, "DisconnetCluster:%d", ClusterID);
+                m_PosConnMap.erase(iter2);
             }
+           
+            iter->second.SocketID = -1;
+            iter->second.ConnPos = 0;
             
-            break;
+            XF_LOG_INFO(0 , 0, "DisconnetCluster:%d", ClusterID);
         }
     }
     
