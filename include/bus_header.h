@@ -2,6 +2,7 @@
 #ifndef __BUS_HEADER__
 #define __BUS_HEADER__
 
+#pragma pack(1)
 typedef struct tagBusHeader
 {
     unsigned int PkgLen; // 4
@@ -10,6 +11,8 @@ typedef struct tagBusHeader
     unsigned int DstID;  // 4
     unsigned int SN;     // 4
     short Ret;           // 2
+    char SendType;       // 1
+    char Flag;           // 1
 
     tagBusHeader()
     {
@@ -18,7 +21,7 @@ typedef struct tagBusHeader
     
     int GetHeaderLen()
     {
-        return 22;
+        return 24;
     }
     
     int Write(char *Buff)
@@ -30,6 +33,8 @@ typedef struct tagBusHeader
         Offset += mmlib::CBuffTool::WriteInt(Buff + Offset, DstID);
         Offset += mmlib::CBuffTool::WriteInt(Buff + Offset, SN);
         Offset += mmlib::CBuffTool::WriteShort(Buff + Offset, Ret);
+        Offset += mmlib::CBuffTool::WriteByte(Buff + Offset, SendType);
+        Offset += mmlib::CBuffTool::WriteByte(Buff + Offset, Flag);
         
         return Offset;
     }
@@ -43,12 +48,13 @@ typedef struct tagBusHeader
         Offset += mmlib::CBuffTool::ReadInt(Buff + Offset, DstID);
         Offset += mmlib::CBuffTool::ReadInt(Buff + Offset, SN);
         Offset += mmlib::CBuffTool::ReadShort(Buff + Offset, Ret);
-        
+        Offset += mmlib::CBuffTool::ReadByte(Buff + Offset, SendType);
+        Offset += mmlib::CBuffTool::ReadByte(Buff + Offset, Flag);
         return Offset;
     }
     
 }BusHeader;
-
+#pragma pack()
 
 typedef struct tagAppHeader
 {
