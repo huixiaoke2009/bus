@@ -2,6 +2,12 @@
 #ifndef __BUS_HEADER__
 #define __BUS_HEADER__
 
+enum
+{
+    TO_SRV = 0,
+    TO_GRP = 1,
+};
+
 #pragma pack(1)
 typedef struct tagBusHeader
 {

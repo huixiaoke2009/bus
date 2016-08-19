@@ -569,6 +569,7 @@ int CBus::Init(const char *pConfFile)
             
             ServerInfo Info;
             Info.ClusterID = ClusterID;
+            Info.GroupID = 0;
             Info.QueueKey = 0;
             Info.QueueSize = 0;
             Info.pQueue = NULL;
@@ -577,19 +578,39 @@ int CBus::Init(const char *pConfFile)
                 string strSvr = CStrTool::Format("SERVER_%d", ServerID);
                 unsigned int tmpClusterID = 0;
                 unsigned int tmpSvrID = 0;
+                unsigned int tmpGroupID = 0;
                 int QueueKey = 0;
                 int QueueSize = 0;
             
                 BusFile.GetInt(strSvr.c_str(), "ClusterID", 0, (int*)&tmpClusterID);
                 BusFile.GetInt(strSvr.c_str(), "ServerID", 0, (int*)&tmpSvrID);
+                BusFile.GetInt(strSvr.c_str(), "GroupID", 0, (int*)&tmpGroupID);
                 BusFile.GetInt(strSvr.c_str(), "QueueKey", 0, &QueueKey);
                 BusFile.GetInt(strSvr.c_str(), "QueueSize", 0, &QueueSize);
                 
-                if(tmpClusterID == 0 || tmpClusterID != ClusterID || tmpSvrID == 0 || tmpSvrID != ServerID)
+                if(tmpClusterID == 0 || tmpClusterID != ClusterID || tmpSvrID == 0 || tmpSvrID != ServerID || tmpGroupID == 0)
                 {
-                    printf("ClusterID or ServerID is illage, %d|%d|%d|%d\n", 
-                                tmpClusterID, ClusterID, tmpSvrID, ServerID);
+                    printf("ClusterID or ServerID or GroupID is illage, %d|%d|%d|%d|%d\n", 
+                                tmpClusterID, ClusterID, tmpSvrID, tmpGroupID, ServerID);
                     return -1;
+                }
+
+                map<unsigned int, vector<unsigned int> >::iterator iter_map = m_mapGrpInfo.find(tmpGroupID);
+                if(iter_map == m_mapGrpInfo.end())
+                {
+                    vector<unsigned int> tmp;
+                    tmp.push_back(ServerID);
+                    
+                    if(m_mapGrpInfo.insert(std::pair<unsigned int, vector<unsigned int> >(tmpGroupID, tmp)).second == false)
+                    {
+                        printf("m_mapGrpInfo insert failed\n");
+                        return -1;
+                    }
+                }
+                else
+                {
+                    vector<unsigned int>& iter_vct = iter_map->second;
+                    iter_vct.push_back(ServerID);
                 }
                 
                 if(QueueKey == 0 || QueueSize == 0)
@@ -604,7 +625,8 @@ int CBus::Init(const char *pConfFile)
                     printf("pQueue Init failed, %0x|%d\n", QueueKey, QueueSize);
                     return -1;
                 }
-                
+
+                Info.GroupID = tmpGroupID;
                 Info.QueueKey = QueueKey;
                 Info.QueueSize = QueueSize;
                 Info.pQueue = pQueue;
@@ -618,14 +640,47 @@ int CBus::Init(const char *pConfFile)
             }
             else
             {
+                string strSvr = CStrTool::Format("SERVER_%d", ServerID);
+                unsigned int tmpClusterID = 0;
+                unsigned int tmpGroupID = 0;
+            
+                BusFile.GetInt(strSvr.c_str(), "ClusterID", 0, (int*)&tmpClusterID);
+                BusFile.GetInt(strSvr.c_str(), "GroupID", 0, (int*)&tmpGroupID);
+
+                
+                if(tmpClusterID == 0 || tmpClusterID != ClusterID || tmpGroupID == 0)
+                {
+                    printf("ClusterID or GroupID is illage, %d|%d|%d\n", 
+                                tmpClusterID, ClusterID, tmpGroupID);
+                    return -1;
+                }
+
+                map<unsigned int, vector<unsigned int> >::iterator iter_map = m_mapGrpInfo.find(tmpGroupID);
+                if(iter_map == m_mapGrpInfo.end())
+                {
+                    vector<unsigned int> tmp;
+                    tmp.push_back(ServerID);
+                    
+                    if(m_mapGrpInfo.insert(std::pair<unsigned int, vector<unsigned int> >(tmpGroupID, tmp)).second == false)
+                    {
+                        printf("m_mapGrpInfo insert failed\n");
+                        return -1;
+                    }
+                }
+                else
+                {
+                    vector<unsigned int>& iter_vct = iter_map->second;
+                    iter_vct.push_back(ServerID);
+                }
+
+                Info.GroupID = tmpGroupID;
+                
                 if(m_mapSvrInfo.insert(std::pair<unsigned int, ServerInfo>(ServerID, Info)).second == false)
                 {
                     printf("m_mapSvrInfo insert failed\n");
                     return -1;
                 }
             }
-            
-            
         } 
     }
     
@@ -1164,6 +1219,15 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
     unsigned int DstID = CurHeader.DstID;
     unsigned int SrcID = CurHeader.SrcID;
     unsigned int CmdID = CurHeader.CmdID;
+    char SendType = CurHeader.SendType;
+
+    XF_LOG_DEBUG(0, 0, "%d|%d|%c|%0x", SrcID, DstID, SendType, CmdID);
+
+    if(SendType != TO_SRV)
+    {
+        XF_LOG_WARN(0, 0, "SendType is not TO_SRV:%d,%d|%d|%0x", TO_SRV, SrcID, DstID, CmdID);
+        return -1;
+    }
     
     map<unsigned int, ServerInfo>::iterator iter = m_mapSvrInfo.find(DstID);
     if(iter == m_mapSvrInfo.end())
@@ -1260,6 +1324,33 @@ int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
     unsigned int DstID = CurHeader.DstID;
     unsigned int SrcID = CurHeader.SrcID;
     unsigned int CmdID = CurHeader.CmdID;
+    char SendType = CurHeader.SendType;
+
+    XF_LOG_DEBUG(0, 0, "%d|%d|%c|%0x", SrcID, DstID, SendType, CmdID);
+
+    if(SendType == TO_GRP)
+    {
+        int Rand = 0;
+        map<unsigned int, vector<unsigned int> >::iterator iter_map = m_mapGrpInfo.find(DstID);
+        if(iter_map == m_mapGrpInfo.end())
+        {
+            XF_LOG_WARN(0, 0, "Unknow DstID %d, %d|%0x", DstID, SrcID, CmdID);
+            return -1;
+        }
+
+        const vector<unsigned int>& iter_vct = iter_map->second;
+        int Size = iter_vct.size();
+        if(Size == 0)
+        {
+            XF_LOG_WARN(0, 0, "Group %d do not have any server", DstID);
+            return -1;
+        }
+        
+        Rand = CRandomTool::Instance()->Get(0, Size);
+        DstID = iter_vct[Rand];
+        
+        XF_LOG_DEBUG(0, 0, "Size, Rand, DstID, %d|%d|%d", Size, Rand, DstID);
+    }
     
     map<unsigned int, ServerInfo>::iterator iter = m_mapSvrInfo.find(DstID);
     if(iter == m_mapSvrInfo.end())

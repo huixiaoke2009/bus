@@ -112,6 +112,7 @@ typedef struct tagClusterInfo
 typedef struct tagServerInfo
 {
     unsigned int ClusterID;
+    unsigned int GroupID;
     int QueueKey;
     int QueueSize;
     mmlib::CShmQueue* pQueue;
@@ -119,12 +120,12 @@ typedef struct tagServerInfo
     tagServerInfo()
     {
         ClusterID = 0;
+        GroupID = 0;
         QueueKey = 0;
         QueueSize = 0;
         pQueue = NULL;
     }
 }ServerInfo;
-
 
 class CBus
 {
@@ -173,6 +174,7 @@ class CBus
 
         std::map<unsigned int, ClusterInfo> m_mapClusterInfo;
         std::map<unsigned int, ServerInfo> m_mapSvrInfo;
+        std::map<unsigned int, std::vector<unsigned int> > m_mapGrpInfo;
         
         mmlib::CShmQueue m_ClusterQueue;
 };
