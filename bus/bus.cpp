@@ -1194,7 +1194,8 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
     //判断包长是否异常
     if(PkgLen > XY_PKG_MAX_LEN)
     {
-        return -1;
+        //相当于不要这个包了
+        return PkgLen;
     }
     
     // ------------------------- bus内部协议 begin ---------------------
@@ -1203,8 +1204,9 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
         bus::HeartbeatMsg CurHeartbeatReq;
         if (!CurHeartbeatReq.ParseFromArray(pCurBuffPos+HeaderLen, PkgLen-HeaderLen))
         {
+            //相当于不要这个包了
             XF_LOG_WARN(0, 0, "Parse Pkg failed, CmdID=%0x", CurHeader.CmdID);
-            return -1;
+            return PkgLen;
         }
         
         unsigned int ClusterID = CurHeartbeatReq.clusterid();
@@ -1221,19 +1223,21 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
     unsigned int CmdID = CurHeader.CmdID;
     char SendType = CurHeader.SendType;
 
-    XF_LOG_DEBUG(0, 0, "%d|%d|%c|%0x", SrcID, DstID, SendType, CmdID);
+    XF_LOG_DEBUG(0, 0, "%d|%d|%d|%0x", SrcID, DstID, SendType, CmdID);
 
     if(SendType != TO_SRV)
     {
+        //相当于不要这个包了
         XF_LOG_WARN(0, 0, "SendType is not TO_SRV:%d,%d|%d|%0x", TO_SRV, SrcID, DstID, CmdID);
-        return -1;
+        return PkgLen;
     }
     
     map<unsigned int, ServerInfo>::iterator iter = m_mapSvrInfo.find(DstID);
     if(iter == m_mapSvrInfo.end())
     {
+        //相当于不要这个包了
         XF_LOG_WARN(0, 0, "Unknow DstID %d, %d|%0x", DstID, SrcID, CmdID);
-        return -1;
+        return PkgLen;
     }
     
     const ServerInfo& Info = iter->second;
@@ -1244,15 +1248,15 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
             Ret = Info.pQueue->InQueue(pCurBuffPos, RecvLen);
             if(Ret == Info.pQueue->E_SHM_QUEUE_FULL)
             {
+                //相当于不要这个包了
                 XF_LOG_WARN(0, 0, "ShmQueue is full, %0x|%d", Info.QueueKey, Info.QueueSize);
                 return PkgLen;
             }
             else if(Ret != 0)
             {
                 XF_LOG_WARN(0, 0, "InQueue failed, %d|%0x|%d", Ret, Info.QueueKey, Info.QueueSize);
-                // 实在没办法，只能清空整条通道
-                //Info.pQueue->Clean();
-                return -1;
+                //相当于不要这个包了
+                return PkgLen;
             }
             else
             {
@@ -1326,7 +1330,7 @@ int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
     unsigned int CmdID = CurHeader.CmdID;
     char SendType = CurHeader.SendType;
 
-    XF_LOG_DEBUG(0, 0, "%d|%d|%c|%0x", SrcID, DstID, SendType, CmdID);
+    XF_LOG_DEBUG(0, 0, "%d|%d|%d|%0x", SrcID, DstID, SendType, CmdID);
 
     if(SendType == TO_GRP)
     {
@@ -1373,8 +1377,6 @@ int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
             else if(Ret != 0)
             {
                 XF_LOG_WARN(0, 0, "InQueue failed, %d|%0x|%d", Ret, Info.QueueKey, Info.QueueSize);
-                // 实在没办法，只能清空整条通道
-                //Info.pQueue->Clean();
                 return -1;
             }
             else
