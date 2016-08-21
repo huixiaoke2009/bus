@@ -221,9 +221,11 @@ int CApp::Run()
             CurHeader.PkgLen = RecvLen+HeaderLen;
             CurHeader.CmdID = 0x10010003;
             CurHeader.SrcID = m_ServerID;
-            CurHeader.DstID = 201;
+            CurHeader.DstID = 2;
             CurHeader.SN = 0;
             CurHeader.Ret = 0;
+            CurHeader.SendType = TO_GRP;
+            CurHeader.Flag = 0;
             
             CurHeader.Write(pRecvBuff);
             
@@ -263,6 +265,7 @@ int CApp::Run()
                 BusHeader CurHeader;
                 int HeaderLen = CurHeader.GetHeaderLen();
                 CurHeader.Read(pRecvBuff);
+                printf("%d|%d|%d|%0x|%d\n", CurHeader.PkgLen, CurHeader.SrcID, CurHeader.DstID, CurHeader.CmdID, CurHeader.SendType);
                 app::MyData CurRsp;
                 if (!CurRsp.ParseFromArray(pRecvBuff+HeaderLen, RecvLen-HeaderLen))
                 {

@@ -1222,8 +1222,9 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
     unsigned int SrcID = CurHeader.SrcID;
     unsigned int CmdID = CurHeader.CmdID;
     char SendType = CurHeader.SendType;
-
-    XF_LOG_DEBUG(0, 0, "%d|%d|%d|%0x", SrcID, DstID, SendType, CmdID);
+    time_t PkgTime = CurHeader.PkgTime;
+    
+    XF_LOG_DEBUG(0, 0, "%d|%d|%d|%0x|%s", SrcID, DstID, SendType, CmdID, CStrTool::TimeString(PkgTime));
 
     if(SendType != TO_SRV)
     {
@@ -1294,7 +1295,7 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
 }
 
 
-int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
+int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
 {
     int Ret = 0;
     
@@ -1329,8 +1330,9 @@ int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
     unsigned int SrcID = CurHeader.SrcID;
     unsigned int CmdID = CurHeader.CmdID;
     char SendType = CurHeader.SendType;
+    time_t PkgTime = CurHeader.PkgTime;
 
-    XF_LOG_DEBUG(0, 0, "%d|%d|%d|%0x", SrcID, DstID, SendType, CmdID);
+    XF_LOG_DEBUG(0, 0, "%d|%d|%d|%0x|%s", SrcID, DstID, SendType, CmdID, CStrTool::TimeString(PkgTime));
 
     if(SendType == TO_GRP)
     {
@@ -1354,6 +1356,10 @@ int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
         DstID = iter_vct[Rand];
         
         XF_LOG_DEBUG(0, 0, "Size, Rand, DstID, %d|%d|%d", Size, Rand, DstID);
+
+        CurHeader.DstID = DstID;
+        CurHeader.SendType = TO_SRV;
+        CurHeader.Write(pCurBuffPos);
     }
     
     map<unsigned int, ServerInfo>::iterator iter = m_mapSvrInfo.find(DstID);
