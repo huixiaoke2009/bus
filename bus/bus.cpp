@@ -1197,12 +1197,14 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
         //相当于不要这个包了
         return PkgLen;
     }
+
+    memcpy(m_pProcessBuff, pCurBuffPos, PkgLen);
     
     // ------------------------- bus内部协议 begin ---------------------
     if(CurHeader.CmdID == Cmd_Heartbeat)
     {
         bus::HeartbeatMsg CurHeartbeatReq;
-        if (!CurHeartbeatReq.ParseFromArray(pCurBuffPos+HeaderLen, PkgLen-HeaderLen))
+        if (!CurHeartbeatReq.ParseFromArray(m_pProcessBuff+HeaderLen, PkgLen-HeaderLen))
         {
             //相当于不要这个包了
             XF_LOG_WARN(0, 0, "Parse Pkg failed, CmdID=%0x", CurHeader.CmdID);
@@ -1246,7 +1248,7 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
     {
         if(Info.pQueue != NULL)
         {
-            Ret = Info.pQueue->InQueue(pCurBuffPos, RecvLen);
+            Ret = Info.pQueue->InQueue(m_pProcessBuff, RecvLen);
             if(Ret == Info.pQueue->E_SHM_QUEUE_FULL)
             {
                 //相当于不要这个包了
@@ -1277,7 +1279,7 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
         {
             if(m_ClusterInfo[i].ClusterID == Info.ClusterID)
             {
-                Ret = Send2Cluster(m_ClusterInfo[i], pCurBuffPos, RecvLen);
+                Ret = Send2Cluster(m_ClusterInfo[i], m_pProcessBuff, RecvLen);
                 if(Ret != 0)
                 {
                     XF_LOG_WARN(0, 0, "Send2Cluster failed, %d", Info.ClusterID);
@@ -1295,7 +1297,7 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
 }
 
 
-int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
+int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
 {
     int Ret = 0;
     
@@ -1325,14 +1327,15 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
         XF_LOG_WARN(0, 0, "PkgLen > XY_PKG_MAX_LEN, %d|%d", RecvLen, XY_PKG_MAX_LEN);
         return -1;
     }
+
+    memcpy(m_pProcessBuff, pCurBuffPos, PkgLen);
     
     unsigned int DstID = CurHeader.DstID;
     unsigned int SrcID = CurHeader.SrcID;
     unsigned int CmdID = CurHeader.CmdID;
     char SendType = CurHeader.SendType;
-    time_t PkgTime = CurHeader.PkgTime;
-
-    XF_LOG_DEBUG(0, 0, "%d|%d|%d|%0x|%s", SrcID, DstID, SendType, CmdID, CStrTool::TimeString(PkgTime));
+    
+    XF_LOG_DEBUG(0, 0, "%d|%d|%d|%0x", SrcID, DstID, SendType, CmdID);
 
     if(SendType == TO_GRP)
     {
@@ -1359,7 +1362,19 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
 
         CurHeader.DstID = DstID;
         CurHeader.SendType = TO_SRV;
-        CurHeader.Write(pCurBuffPos);
+        if(CurHeader.PkgTime == 0)
+        {
+            CurHeader.PkgTime = time(NULL);
+        }
+        CurHeader.Write(m_pProcessBuff);
+    }
+    else
+    {
+        if(CurHeader.PkgTime == 0)
+        {
+            CurHeader.PkgTime = time(NULL);
+            CurHeader.Write(m_pProcessBuff);
+        }
     }
     
     map<unsigned int, ServerInfo>::iterator iter = m_mapSvrInfo.find(DstID);
@@ -1374,7 +1389,7 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
     {
         if(Info.pQueue != NULL)
         {
-            Ret = Info.pQueue->InQueue(pCurBuffPos, RecvLen);
+            Ret = Info.pQueue->InQueue(m_pProcessBuff, RecvLen);
             if(Ret == Info.pQueue->E_SHM_QUEUE_FULL)
             {
                 XF_LOG_WARN(0, 0, "ShmQueue is full, %0x|%d", Info.QueueKey, Info.QueueSize);
@@ -1400,7 +1415,7 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
         map<unsigned int, ClusterInfo>::iterator iter2 = m_mapClusterInfo.find(Info.ClusterID);
         if(iter2 != m_mapClusterInfo.end())
         {
-            Ret = Send2Cluster(iter2->second, pCurBuffPos, RecvLen);
+            Ret = Send2Cluster(iter2->second, m_pProcessBuff, RecvLen);
             if(Ret != 0)
             {
                 XF_LOG_WARN(0, 0, "Send2Cluster failed, %d", Info.ClusterID);

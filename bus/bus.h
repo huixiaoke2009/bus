@@ -142,7 +142,7 @@ class CBus
         int ListenUdp(const char* pAddr, int Port);
         int AcceptConn(unsigned int ConnPos);
         int ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
-        int ForwardMsg(char *pCurBuffPos, int RecvLen);
+        int ForwardMsg(const char *pCurBuffPos, int RecvLen);
         void ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
         void RecvHelloMessage(unsigned int ConnPos);
         void SendHelloMessage();
