@@ -880,8 +880,8 @@ int CBus::Run()
         
         
         // 从自己的通道获取数据进行转发
-        RecvLen = XY_MAXBUFF_LEN;
-        Ret = m_ClusterQueue.OutQueue(pRecvBuff, &RecvLen);
+        RecvLen = XY_PKG_MAX_LEN;
+        Ret = m_ClusterQueue.OutQueue(m_pProcessBuff, &RecvLen);
         if(Ret == m_ClusterQueue.E_SHM_QUEUE_EMPTY)
         {
             
@@ -893,7 +893,7 @@ int CBus::Run()
         else
         {
             XF_LOG_TRACE(0, 0, "ClusterQueue OutQueue success");
-            Ret = ForwardMsg(pRecvBuff, RecvLen);
+            Ret = ForwardMsg(m_pProcessBuff, RecvLen);
             if(Ret != 0)
             {
                 XF_LOG_WARN(0, 0, "ForwardMsg failed, Ret = %d", Ret);
@@ -1297,7 +1297,7 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
 }
 
 
-int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
+int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
 {
     int Ret = 0;
     
@@ -1327,8 +1327,6 @@ int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
         XF_LOG_WARN(0, 0, "PkgLen > XY_PKG_MAX_LEN, %d|%d", RecvLen, XY_PKG_MAX_LEN);
         return -1;
     }
-
-    memcpy(m_pProcessBuff, pCurBuffPos, PkgLen);
     
     unsigned int DstID = CurHeader.DstID;
     unsigned int SrcID = CurHeader.SrcID;
@@ -1366,14 +1364,14 @@ int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
         {
             CurHeader.PkgTime = time(NULL);
         }
-        CurHeader.Write(m_pProcessBuff);
+        CurHeader.Write(pCurBuffPos);
     }
     else
     {
         if(CurHeader.PkgTime == 0)
         {
             CurHeader.PkgTime = time(NULL);
-            CurHeader.Write(m_pProcessBuff);
+            CurHeader.Write(pCurBuffPos);
         }
     }
     
@@ -1389,7 +1387,7 @@ int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
     {
         if(Info.pQueue != NULL)
         {
-            Ret = Info.pQueue->InQueue(m_pProcessBuff, RecvLen);
+            Ret = Info.pQueue->InQueue(pCurBuffPos, RecvLen);
             if(Ret == Info.pQueue->E_SHM_QUEUE_FULL)
             {
                 XF_LOG_WARN(0, 0, "ShmQueue is full, %0x|%d", Info.QueueKey, Info.QueueSize);
@@ -1415,7 +1413,7 @@ int CBus::ForwardMsg(const char *pCurBuffPos, int RecvLen)
         map<unsigned int, ClusterInfo>::iterator iter2 = m_mapClusterInfo.find(Info.ClusterID);
         if(iter2 != m_mapClusterInfo.end())
         {
-            Ret = Send2Cluster(iter2->second, m_pProcessBuff, RecvLen);
+            Ret = Send2Cluster(iter2->second, pCurBuffPos, RecvLen);
             if(Ret != 0)
             {
                 XF_LOG_WARN(0, 0, "Send2Cluster failed, %d", Info.ClusterID);
