@@ -7,6 +7,7 @@ LOGSVR = logsvr
 MAKE = make
 CLEAN = clean
 INSTALL = install
+CONN = conn
 
 all:
 	cd $(MMLIB) && $(MAKE)
@@ -14,11 +15,11 @@ all:
 	cd $(BUS) && $(MAKE)
 	cd $(APP) && $(MAKE)
 	cd $(LOGSVR) && $(MAKE)
-
+	cd $(CONN) && $(MAKE)
 clean:
 	cd $(MMLIB) && $(MAKE) $(CLEAN)
 	cd $(INCLUDE) && $(MAKE) $(CLEAN)
 	cd $(BUS) && $(MAKE) $(CLEAN)
 	cd $(APP) && $(MAKE) $(CLEAN)
 	cd $(LOGSVR) && $(MAKE) $(CLEAN)
-
+	cd $(CONN) && $(MAKE) $(CLEAN)
