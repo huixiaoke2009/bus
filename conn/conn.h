@@ -140,6 +140,7 @@ class CConn
         int Send2Client(int CurConnPos,const char *pSendBuff, int SendBuffLen);
         int Send2Server(const XYHeaderIn& Header, unsigned int CmdID, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message);
         int ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
+        int DealPkg(const char *pCurBuffPos, int RecvLen);
         int GetUserConnPos(uint64_t UserID, unsigned int &ConnPos);
     private:
         // EPOLL句柄

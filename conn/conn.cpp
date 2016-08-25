@@ -33,8 +33,6 @@ const unsigned int WLISTEN_SOCK_CPOS_MAX = 299;
 const unsigned int CLIENT_SOCK_CPOS_MIN = 500;    //500以上才是客户端连接上来的Socket
 
 const unsigned int MAX_EPOLL_RET_EVENTS = 1024;
-const unsigned int MAX_QUEUEPKG_PER_LOOP = 100;
-
 
 
 bool StopFlag = false;
@@ -975,52 +973,28 @@ int CConn::Run()
         
 
         // 从Queue收包
+        const unsigned int MAX_QUEUEPKG_PER_LOOP = 100;
         for(int CurRecvCount=0; CurRecvCount<(int)MAX_QUEUEPKG_PER_LOOP; CurRecvCount++)
         {
             SendLen = XY_PKG_MAX_LEN;
             Ret = m_RecvQueue.OutQueue(m_pProcessBuff, &SendLen);
             if (Ret == 0)
             {
-                XF_LOG_DEBUG(0, 0, "ConnRun|OutQueue|%d|%s", SendLen, CStrTool::Str2Hex(m_pProcessBuff, SendLen));
-                if ((SendLen <= (int)sizeof(ConnMeta))||(SendLen > XY_MAXBUFF_LEN))
-                {
-                    XF_LOG_WARN(0, 0, "%s|%d|out queue len is not valid, len=%d", __FUNCTION__, __LINE__, SendLen);
-                    continue;
-                }
-
+                XF_LOG_TRACE(0, 0, "ConnRun|OutQueue|%d|%s", SendLen, CStrTool::Str2Hex(m_pProcessBuff, SendLen));
+                
                 //需要发包哦~~
                 EmptyFlag = 0;
-                XYHeaderIn CurHeaderIn;
-                memcpy(&CurHeaderIn, m_pProcessBuff, sizeof(CurHeaderIn));
-                char *pSendBuff = m_pProcessBuff + sizeof(XYHeaderIn);
-                int SendBuffLen = SendLen - sizeof(XYHeaderIn);
+                BusHeader CurBusHeader;
+                CurBusHeader.Read(m_pProcessBuff);
+                int PkgLen = SendLen - CurBusHeader.GetHeaderLen();
+                char *pSendBuff = m_pProcessBuff + CurBusHeader.GetHeaderLen();
 
-                //重新组织客户端包头
-                XYHeader CurHeader = CurHeaderIn.CoverToXYHeader(SendLen);
-                CurHeader.Write(pSendBuff);
-
-                //计算校验和
-
-                //再次写入包头
-
-
-                unsigned int CurConnPos =0;
-                if(CurHeaderIn.ConnPos == 0)
+                Ret = DealPkg(pSendBuff, PkgLen);
+                if(Ret != 0)
                 {
-                    Ret = GetUserConnPos(CurHeaderIn.UserID, CurConnPos);
-                    if(Ret == -1)
-                    {
-                        continue;
-                    }
+                    XF_LOG_WARN(0, 0, "DealPkg failed, Ret=%d", Ret);
+                    continue;
                 }
-                else
-                {
-                    CurConnPos = CurHeaderIn.ConnPos;
-                }
-
-                XF_LOG_DEBUG(0, 0, "ConnRun|Send|%d|%s", SendBuffLen, CStrTool::Str2Hex(pSendBuff, SendBuffLen));
-
-                Send2Client(CurConnPos, pSendBuff, SendBuffLen);
             }
             else if (Ret == CShmQueue::E_SHM_QUEUE_EMPTY)
             {
@@ -1113,6 +1087,22 @@ int CConn::Send2Server(const XYHeaderIn& Header, unsigned int CmdID, unsigned in
         XF_LOG_WARN(0, 0, "pack err msg failed");
         return -1;
     }
+
+    int Ret = m_SendQueue.InQueue(m_pSendBuff, CurBusHeader.PkgLen);
+    if(Ret == m_SendQueue.E_SHM_QUEUE_FULL)
+    {
+        XF_LOG_WARN(0, 0, "m_SendQueue InQueue failed, queue full");
+        return -1;
+    }
+    else if (Ret != 0)
+    {
+        XF_LOG_WARN(0, 0, "m_SendQueue InQueue failed, Ret=%d", Ret);
+        return -1;
+    }
+    else
+    {
+        XF_LOG_TRACE(0, 0, "m_SendQueue InQueue Success,[%s]", CStrTool::Str2Hex(m_pSendBuff, CurBusHeader.PkgLen));
+    }
     
     return 0;
 }
@@ -1146,9 +1136,9 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
         return CurHeader.PkgLen;
     }
 
-    int HeaderLen = CurHeader.GetHeadLen();
-    int PkgInLen = sizeof(XYHeaderIn) + CurHeader.PkgLen-HeaderLen;
-    memcpy(m_pProcessBuff+sizeof(XYHeaderIn), pCurBuffPos+HeaderLen, CurHeader.PkgLen-HeaderLen);
+    // 除去所有包头的长度
+    int PkgInLen = CurHeader.PkgLen-CurHeader.GetHeadLen();
+    memcpy(m_pProcessBuff+sizeof(XYHeaderIn), pCurBuffPos+CurHeader.GetHeadLen(), PkgInLen);
     
     
     XYHeaderIn* pHeader = (XYHeaderIn*)m_pProcessBuff;
@@ -1177,9 +1167,9 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
         case Cmd_Login_Req:
         {
             app::LoginReq CurReq;
-            if(!CurReq.ParseFromArray(pProcessBuff+sizeof(XYHeaderIn), PkgInLen-sizeof(XYHeaderIn)))
+            if(!CurReq.ParseFromArray(pProcessBuff+sizeof(XYHeaderIn), PkgInLen))
             {
-                XF_LOG_WARN(0, 0, "login pkg parse failed, protocol buffer pkg len = %d", PkgInLen-(int)sizeof(XYHeaderIn));
+                XF_LOG_WARN(0, 0, "login pkg parse failed, protocol buffer pkg len = %d", PkgInLen);
                 return -1;
             }
 
@@ -1208,6 +1198,39 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
     
 
     return CurHeader.PkgLen;
+}
+
+int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
+{
+    XYHeaderIn CurHeaderIn;
+    CurHeaderIn.Copy(*(const XYHeaderIn*)pCurBuffPos);
+
+    switch(CurHeaderIn.CmdID)
+    {
+        default:
+        {
+            XYHeader CurHeader;
+            CurHeader = CurHeaderIn.CoverToXYHeader(PkgLen);
+            CurHeader.Write(m_pSendBuff);
+            memcpy(m_pSendBuff+CurHeader.GetHeadLen(), pCurBuffPos, PkgLen-sizeof(XYHeaderIn));
+
+            unsigned int CurConnPos = CurHeaderIn.ConnPos;
+            if(CurConnPos == 0)
+            {
+                int Ret = GetUserConnPos(CurHeaderIn.UserID, CurConnPos);
+                if(Ret != 0)
+                {
+                    break;
+                }
+            }
+
+            Send2Client(CurConnPos, m_pSendBuff, PkgLen-sizeof(XYHeaderIn)+CurHeader.GetHeadLen());
+            
+            break;
+        }
+    }
+    
+    return 0;
 }
 
 

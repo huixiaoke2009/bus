@@ -1228,9 +1228,10 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
     unsigned int SrcID = CurHeader.SrcID;
     unsigned int CmdID = CurHeader.CmdID;
     char SendType = CurHeader.SendType;
+    char Flag = CurHeader.Flag;
     time_t PkgTime = CurHeader.PkgTime;
     
-    XF_LOG_DEBUG(0, 0, "%d|%d|%d|%0x|%s", SrcID, DstID, SendType, CmdID, CStrTool::TimeString(PkgTime));
+    XF_LOG_DEBUG(0, 0, "%d|%d|%d|%d|%0x|%s", SrcID, DstID, SendType, Flag, CmdID, CStrTool::TimeString(PkgTime));
 
     if(SendType != TO_SRV)
     {
@@ -1336,8 +1337,9 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
     unsigned int SrcID = CurHeader.SrcID;
     unsigned int CmdID = CurHeader.CmdID;
     char SendType = CurHeader.SendType;
+    char Flag = CurHeader.Flag;
     
-    XF_LOG_DEBUG(0, 0, "%d|%d|%d|%0x", SrcID, DstID, SendType, CmdID);
+    XF_LOG_DEBUG(0, 0, "%d|%d|%d|%d|%0x", SrcID, DstID, SendType, Flag, CmdID);
 
     if(SendType == TO_GRP)
     {
