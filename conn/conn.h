@@ -3,8 +3,10 @@
 #include <arpa/inet.h>
 #include <string>
 #include <map>
+#include <google/protobuf/message.h>
 #include "shm_queue/shm_queue.h"
 #include "common.h"
+#include "../include/header.h"
 
 #ifndef _CONN_H_
 #define _CONN_H_
@@ -132,18 +134,14 @@ class CConn
         const char *GetErrMsg() { return m_szErrMsg;};
 
     private:
-        void ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
-        int LogoutUser(uint64_t UserID);
-        int ConnRun();
         int AcceptConn(int ConnPos, int type);
         void CheckConn();
-        int ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
+        void ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
         int Send2Client(int CurConnPos,const char *pSendBuff, int SendBuffLen);
+        int Send2Server(const XYHeaderIn& Header, unsigned int CmdID, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message);
+        int ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
         int GetUserConnPos(uint64_t UserID, unsigned int &ConnPos);
-
     private:
-        // 监听SOCK句柄
-        std::vector<ConnMeta> m_ListenConnMetaList;
         // EPOLL句柄
         int m_EpollFD;
         int m_ServerID;
@@ -159,11 +157,13 @@ class CConn
         int m_TimeOut;
 
         mmlib::CShmQueue m_RecvQueue;
+        mmlib::CShmQueue m_SendQueue;
 
         char m_ConfFile[256];
         char m_szErrMsg[256];
 
         char *m_pProcessBuff;
+        char *m_pSendBuff;
 };
 
 #endif

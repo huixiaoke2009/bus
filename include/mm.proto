@@ -1,0 +1,14 @@
+
+
+package mm;
+
+message LoginReq
+{
+    required uint64 userid = 1;
+    required string passwd = 2;
+}
+
+message LoginRsp
+{
+    required int32 ret = 1;
+}

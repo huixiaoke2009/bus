@@ -12,9 +12,13 @@
 #include "log/log.h"
 #include "util/util.h"
 #include "ini_file/ini_file.h"
-#include "../include/header.h"
 #include "../include/cmd.h"
-#include "md5/md5.h" //NOTE 当 usertype =1 时 只有用这里的函数才产生与后台一致的签名
+#include "md5/md5.h"
+#include "bus_header.h"
+
+
+#include "app.pb.h"
+#include "mm.pb.h"
 
 
 using namespace mmlib;
@@ -339,8 +343,8 @@ CConn::CConn()
     m_itrCurCheckConn = m_PosConnMap.begin();
     m_TimeOut = 0;
 
-    m_ListenConnMetaList.clear();
     m_pProcessBuff = NULL;
+    m_pSendBuff = NULL;
     memset(&m_ConfFile, 0, sizeof(m_ConfFile));
 }
 
@@ -355,6 +359,11 @@ CConn::~CConn()
     if(m_pProcessBuff)
     {
         SAFE_DELETE(m_pProcessBuff);
+    }
+
+    if(m_pSendBuff)
+    {
+        SAFE_DELETE(m_pSendBuff);
     }
 }
 
@@ -380,29 +389,27 @@ int CConn::Init(const char *pConfFile)
     CIniFile IniFile(pConfFile);
 
     char ListenStr[1024] = {0};
+    char BusConfPath[256] = {0};
+
     char ModuleName[256] = {0};
     int LogLocal = 0;
     int LogLevel = 0;
     char LogPath[1024] = {0};
 
-    int ConnRecvQueueKey;
-    int ConnRecvQueueSize;
-
     snprintf(m_ConfFile, sizeof(m_ConfFile), "%s", pConfFile);
 
     if (IniFile.IsValid())
     {
-        IniFile.GetInt("PUBLIC", "BhPlatSvrID", 0, &m_ServerID);
+        IniFile.GetInt("CONN", "ServerID", 0, &m_ServerID);
         IniFile.GetString("CONN", "Listen", "", ListenStr, sizeof(ListenStr));
         IniFile.GetInt("CONN", "TimeOut", 600, &m_TimeOut);    //默认10分钟没有请求，将断开链接
 
-        IniFile.GetInt("CONN", "ConnRecvQueueKey", 0, &ConnRecvQueueKey);
-        IniFile.GetInt("CONN", "ConnRecvQueueSize", 0, &ConnRecvQueueSize);
-
-        IniFile.GetString("CONN", "ModuleName", "conn", ModuleName, sizeof(ModuleName));
-        IniFile.GetInt("CONN", "LogLocal", 1, &LogLocal);
-        IniFile.GetInt("CONN", "LogLevel", 3, &LogLevel);
-        IniFile.GetString("CONN", "LogPath", "./log", LogPath, sizeof(LogPath));
+        IniFile.GetString("CONN", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
+        
+        IniFile.GetString("LOG", "ModuleName", "conn", ModuleName, sizeof(ModuleName));
+        IniFile.GetInt("LOG", "LogLocal", 1, &LogLocal);
+        IniFile.GetInt("LOG", "LogLevel", 3, &LogLevel);
+        IniFile.GetString("LOG", "LogPath", "./log", LogPath, sizeof(LogPath));
     }
     else
     {
@@ -412,6 +419,30 @@ int CConn::Init(const char *pConfFile)
 
     printf("INFO:read conf succ, ServerID=%d\n", m_ServerID);
 
+    if(BusConfPath[0] == 0)
+    {
+        printf("ERR:BUS/BusConfPath is not valid\n");
+        return -1;
+    }
+
+    int ConnRecvQueueKey= 0;
+    int ConnRecvQueueSize = 0;
+    int ConnSendQueueKey = 0;
+    int ConnSendQueueSize = 0;
+    string strServerID = CStrTool::Format("SERVER_%d", m_ServerID);
+    
+    CIniFile BusFile(BusConfPath);
+    if (!BusFile.IsValid())
+    {
+        printf("ERR:conf file [%s] is not valid\n", BusConfPath);
+        return -1;
+    }
+
+    BusFile.GetInt("BUS_GLOBAL", "GCIMKey", 0, &ConnSendQueueKey);
+    BusFile.GetInt("BUS_GLOBAL", "GCIMSize", 0, &ConnSendQueueSize);
+    BusFile.GetInt(strServerID.c_str(), "QueueKey", 0, &ConnRecvQueueKey);
+    BusFile.GetInt(strServerID.c_str(), "QueueSize", 0, &ConnRecvQueueSize);
+    
     if (ModuleName[0] == 0)
     {
         printf("ERR:LOG/ModuleName is not valid\n");
@@ -430,9 +461,15 @@ int CConn::Init(const char *pConfFile)
         m_pProcessBuff = (char *)malloc(XY_PKG_MAX_LEN);
     }
 
+    if (!m_pSendBuff)
+    {
+        m_pSendBuff = (char *)malloc(XY_PKG_MAX_LEN);
+    }
+
     //解析监听地址
     char *pszOneIPAddr = NULL;
     int iCurAddrNum = 0;
+    std::vector<ConnMeta> vctListenConnMetaList;
     for(char *pszSecVal = ListenStr; (pszOneIPAddr = strtok(pszSecVal, ",")) != NULL; pszSecVal=NULL)
     {
         //去掉空格
@@ -470,10 +507,10 @@ int CConn::Init(const char *pConfFile)
 
         iCurAddrNum++;
 
-        m_ListenConnMetaList.push_back(CurAddr);
+        vctListenConnMetaList.push_back(CurAddr);
     }
 
-    if (m_ListenConnMetaList.size() == 0)
+    if (vctListenConnMetaList.size() == 0)
     {
         snprintf(m_szErrMsg, sizeof(m_szErrMsg), "CONN/Listen is not valid, str=%s, addr_num=%d", ListenStr, 0);
         return -1;
@@ -489,6 +526,15 @@ int CConn::Init(const char *pConfFile)
     }
     XF_LOG_INFO(0, 0,  "init RecvQueue succ, key=0x%x, size=%u", ConnRecvQueueKey, ConnRecvQueueSize);
 
+    
+    Ret = m_SendQueue.Init(ConnSendQueueKey, ConnSendQueueSize);
+    if (Ret != 0)
+    {
+        snprintf(m_szErrMsg, sizeof(m_szErrMsg), "init SendQueue failed, key=%u, size=%u, ret=%d, errmsg=%s", ConnSendQueueKey, ConnSendQueueSize, Ret, m_SendQueue.GetErrMsg());
+        return -1;
+    }
+    XF_LOG_INFO(0, 0,  "init SendQueue succ, key=0x%x, size=%u", ConnSendQueueKey, ConnSendQueueSize);
+
     //创建EPOLL
     m_EpollFD = epoll_create(XY_MAX_CONN_NUM);
     if (m_EpollFD == -1)
@@ -498,7 +544,7 @@ int CConn::Init(const char *pConfFile)
     }
 
     //创建监听 和 EPOLL
-    for (unsigned int i = 0; i < m_ListenConnMetaList.size(); i++)
+    for (unsigned int i = 0; i < vctListenConnMetaList.size(); i++)
     {
         int CurListenSockID = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -518,8 +564,8 @@ int CConn::Init(const char *pConfFile)
         struct sockaddr_in addr;
         memset(&addr, 0x0, sizeof(addr));
         addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = m_ListenConnMetaList[i].LocalIP;
-        addr.sin_port = htons((unsigned short)m_ListenConnMetaList[i].LocalPort);
+        addr.sin_addr.s_addr = vctListenConnMetaList[i].LocalIP;
+        addr.sin_port = htons((unsigned short)vctListenConnMetaList[i].LocalPort);
 
         if(-1 == TEMP_FAILURE_RETRY(::bind(CurListenSockID, (struct sockaddr*)&addr, sizeof(addr))))
         {
@@ -736,7 +782,7 @@ void CConn::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInf
     SAFE_DELETE(pCurConnInfo);
 }
 
-int CConn::ConnRun()
+int CConn::Run()
 {
     int Ret = 0;
     StopFlag = false;
@@ -931,11 +977,11 @@ int CConn::ConnRun()
         // 从Queue收包
         for(int CurRecvCount=0; CurRecvCount<(int)MAX_QUEUEPKG_PER_LOOP; CurRecvCount++)
         {
-            SendLen = XY_MAXBUFF_LEN;
-            Ret = m_RecvQueue.OutQueue(pRecvBuff, &SendLen);
+            SendLen = XY_PKG_MAX_LEN;
+            Ret = m_RecvQueue.OutQueue(m_pProcessBuff, &SendLen);
             if (Ret == 0)
             {
-                XF_LOG_DEBUG(0, 0, "ConnRun|OutQueue|%d|%s", SendLen, CStrTool::Str2Hex(pRecvBuff, SendLen));
+                XF_LOG_DEBUG(0, 0, "ConnRun|OutQueue|%d|%s", SendLen, CStrTool::Str2Hex(m_pProcessBuff, SendLen));
                 if ((SendLen <= (int)sizeof(ConnMeta))||(SendLen > XY_MAXBUFF_LEN))
                 {
                     XF_LOG_WARN(0, 0, "%s|%d|out queue len is not valid, len=%d", __FUNCTION__, __LINE__, SendLen);
@@ -945,8 +991,8 @@ int CConn::ConnRun()
                 //需要发包哦~~
                 EmptyFlag = 0;
                 XYHeaderIn CurHeaderIn;
-                memcpy(&CurHeaderIn, pRecvBuff, sizeof(CurHeaderIn));
-                char *pSendBuff = pRecvBuff + sizeof(XYHeaderIn);
+                memcpy(&CurHeaderIn, m_pProcessBuff, sizeof(CurHeaderIn));
+                char *pSendBuff = m_pProcessBuff + sizeof(XYHeaderIn);
                 int SendBuffLen = SendLen - sizeof(XYHeaderIn);
 
                 //重新组织客户端包头
@@ -1046,6 +1092,31 @@ int CConn::Send2Client(int CurConnPos, const char *pSendBuff, int SendBuffLen)
     return 0;
 }
 
+
+int CConn::Send2Server(const XYHeaderIn& Header, unsigned int CmdID, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message)
+{
+    BusHeader CurBusHeader;
+    int HeaderLen = CurBusHeader.GetHeaderLen() + sizeof(XYHeaderIn);
+    CurBusHeader.PkgLen = HeaderLen + Message.ByteSize();
+    CurBusHeader.CmdID = Cmd_Transfer;
+    CurBusHeader.SrcID = m_ServerID;
+    CurBusHeader.DstID = DstID;
+    CurBusHeader.SendType = SendType;
+    CurBusHeader.Flag = Flag;
+    CurBusHeader.Write(m_pSendBuff);
+
+    XYHeaderIn* pHeader = (XYHeaderIn*)(m_pSendBuff+CurBusHeader.GetHeaderLen());
+    pHeader->Copy(Header);
+
+    if(!Message.SerializeToArray(m_pSendBuff+HeaderLen, XY_PKG_MAX_LEN-HeaderLen))
+    {
+        XF_LOG_WARN(0, 0, "pack err msg failed");
+        return -1;
+    }
+    
+    return 0;
+}
+
 //返回值:0~PkgLen-1表示包不够大，-1表示出错要删除链接， PkgLen表示正常。如果要删除链接不要在这里删，返回-1即可
 int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap)
 {
@@ -1075,25 +1146,68 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
         return CurHeader.PkgLen;
     }
 
-    int PkgInLen = sizeof(XYHeaderIn);
+    int HeaderLen = CurHeader.GetHeadLen();
+    int PkgInLen = sizeof(XYHeaderIn) + CurHeader.PkgLen-HeaderLen;
+    memcpy(m_pProcessBuff+sizeof(XYHeaderIn), pCurBuffPos+HeaderLen, CurHeader.PkgLen-HeaderLen);
+    
+    
+    XYHeaderIn* pHeader = (XYHeaderIn*)m_pProcessBuff;
+    pHeader->CmdID = CurHeader.CmdID;
+    pHeader->SN = CurHeader.SN;
+    pHeader->ConnPos = pConnInfoMap->second->GetConnPos();
+    pHeader->UserID = CurHeader.UserID;
+    pHeader->PkgTime = time(NULL);
+    pHeader->Ret = CurHeader.Ret;
 
     //校验CKSUM
-
+    
+    
     //读取包体
 
+    char* pProcessBuff = m_pProcessBuff;
+    
+    if(CurHeader.Compresse == 1)
+    {
+        //暂时不考虑
+        pProcessBuff = m_pProcessBuff;
+    }
+
+    switch(pHeader->CmdID)
+    {
+        case Cmd_Login_Req:
+        {
+            app::LoginReq CurReq;
+            if(!CurReq.ParseFromArray(pProcessBuff+sizeof(XYHeaderIn), PkgInLen-sizeof(XYHeaderIn)))
+            {
+                XF_LOG_WARN(0, 0, "login pkg parse failed, protocol buffer pkg len = %d", PkgInLen-(int)sizeof(XYHeaderIn));
+                return -1;
+            }
+
+            uint64_t UserID = CurReq.userid();
+            string strPasswd = CurReq.passwd();
+            
+            mm::LoginReq CurReq2;
+            CurReq2.set_userid(UserID);
+            CurReq2.set_passwd(strPasswd);
+
+            Ret = Send2Server(*pHeader, Cmd_Login_Req, GROUP_AUTH, TO_GRP, 0, CurReq2);
+            if(Ret != 0)
+            {
+                XF_LOG_WARN(0, 0, "Send2Server failed, Ret=%d", Ret);
+                return -1;
+            }
+
+            break;
+        }
+        default:
+        {
+            XF_LOG_WARN(0, 0, "unknow command %0x", pHeader->CmdID);
+            break;
+        }
+    }
+    
 
     return CurHeader.PkgLen;
-}
-
-
-int CConn::Run()
-{
-    //主进程运行
-    ConnRun();
-
-    XF_LOG_INFO(0, 0, "proc stoped succ");
-
-    return 0;
 }
 
 

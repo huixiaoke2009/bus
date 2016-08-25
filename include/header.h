@@ -68,7 +68,7 @@ typedef struct tagXYHeaderIn
     unsigned int SN;
     unsigned int ConnPos;
     unsigned long long UserID;
-    struct timeval PkgTime;
+    unsigned long long PkgTime;
     unsigned short Ret;
 
     XYHeader CoverToXYHeader(int PkgLen)
@@ -81,6 +81,16 @@ typedef struct tagXYHeaderIn
         TmpHeader.Ret = Ret;
 
         return TmpHeader;
+    }
+
+    void Copy(const tagXYHeaderIn& o)
+    {
+        CmdID = o.CmdID;
+        SN = o.SN;
+        ConnPos = o.ConnPos;
+        UserID = o.UserID;
+        PkgTime = o.PkgTime;
+        Ret = o.Ret;
     }
 
     tagXYHeaderIn()

@@ -222,8 +222,6 @@ int CApp::Run()
             CurHeader.CmdID = 0x10010003;
             CurHeader.SrcID = m_ServerID;
             CurHeader.DstID = 2;
-            CurHeader.SN = 0;
-            CurHeader.Ret = 0;
             CurHeader.SendType = TO_GRP;
             CurHeader.Flag = 0;
             

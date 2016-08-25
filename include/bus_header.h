@@ -16,8 +16,6 @@ typedef struct tagBusHeader
     unsigned int SrcID;  // 4
     unsigned int DstID;  // 4
     unsigned long long PkgTime; // 8
-    unsigned int SN;     // 4
-    short Ret;           // 2
     char SendType;       // 1
     char Flag;           // 1
 
@@ -28,15 +26,13 @@ typedef struct tagBusHeader
         SrcID = 0;
         DstID = 0;
         PkgTime = 0;
-        SN = 0;
-        Ret = 0;
         SendType = 0;
         Flag = 0;
     }
     
     int GetHeaderLen()
     {
-        return 32;
+        return 26;
     }
     
     int Write(char *Buff)
@@ -47,8 +43,6 @@ typedef struct tagBusHeader
         Offset += mmlib::CBuffTool::WriteInt(Buff + Offset, SrcID);
         Offset += mmlib::CBuffTool::WriteInt(Buff + Offset, DstID);
         Offset += mmlib::CBuffTool::WriteLongLong(Buff + Offset, PkgTime);
-        Offset += mmlib::CBuffTool::WriteInt(Buff + Offset, SN);
-        Offset += mmlib::CBuffTool::WriteShort(Buff + Offset, Ret);
         Offset += mmlib::CBuffTool::WriteByte(Buff + Offset, SendType);
         Offset += mmlib::CBuffTool::WriteByte(Buff + Offset, Flag);
         
@@ -63,8 +57,6 @@ typedef struct tagBusHeader
         Offset += mmlib::CBuffTool::ReadInt(Buff + Offset, SrcID);
         Offset += mmlib::CBuffTool::ReadInt(Buff + Offset, DstID);
         Offset += mmlib::CBuffTool::ReadLongLong(Buff + Offset, PkgTime);
-        Offset += mmlib::CBuffTool::ReadInt(Buff + Offset, SN);
-        Offset += mmlib::CBuffTool::ReadShort(Buff + Offset, Ret);
         Offset += mmlib::CBuffTool::ReadByte(Buff + Offset, SendType);
         Offset += mmlib::CBuffTool::ReadByte(Buff + Offset, Flag);
         return Offset;

@@ -2,8 +2,8 @@ CXX = g++
 RM = rm -f
 CP = cp -f
 CXXFLAGS += -Wall -D_GNU_SOURCE  -g -DLINUX -O0 -fPIC 
-INCS = -I. -I../include -I../mmlib 
-LIBS = ../mmlib/mmlib.a /usr/local/lib/libprotobuf.a -lpthread
+INCS = -I. -I../include -I../mmlib -I../mmlib -I/usr/local/include/google/protobuf 
+LIBS = ../mmlib/mmlib.a ../include/bus.a /usr/local/lib/libprotobuf.a -lpthread
 
 TARGETS = conn
 

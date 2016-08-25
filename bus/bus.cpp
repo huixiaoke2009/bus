@@ -878,25 +878,29 @@ int CBus::Run()
             //没有任何事件
         }
         
-        
         // 从自己的通道获取数据进行转发
-        RecvLen = XY_PKG_MAX_LEN;
-        Ret = m_ClusterQueue.OutQueue(m_pProcessBuff, &RecvLen);
-        if(Ret == m_ClusterQueue.E_SHM_QUEUE_EMPTY)
+        const int MAX_QUEUEPKG_PER_LOOP = 10;
+        for(int i = 0; i < MAX_QUEUEPKG_PER_LOOP; i++)
         {
-            
-        }
-        else if(Ret != 0)
-        {
-            XF_LOG_WARN(0, 0, "ClusterQueue OutQueue failed");
-        }
-        else
-        {
-            XF_LOG_TRACE(0, 0, "ClusterQueue OutQueue success");
-            Ret = ForwardMsg(m_pProcessBuff, RecvLen);
-            if(Ret != 0)
+            RecvLen = XY_PKG_MAX_LEN;
+            Ret = m_ClusterQueue.OutQueue(m_pProcessBuff, &RecvLen);
+            if(Ret == m_ClusterQueue.E_SHM_QUEUE_EMPTY)
             {
-                XF_LOG_WARN(0, 0, "ForwardMsg failed, Ret = %d", Ret);
+                break;    
+            }
+            else if(Ret != 0)
+            {
+                XF_LOG_WARN(0, 0, "ClusterQueue OutQueue failed");
+                break;
+            }
+            else
+            {
+                XF_LOG_TRACE(0, 0, "ClusterQueue OutQueue success");
+                Ret = ForwardMsg(m_pProcessBuff, RecvLen);
+                if(Ret != 0)
+                {
+                    XF_LOG_WARN(0, 0, "ForwardMsg failed, Ret = %d", Ret);
+                }
             }
         }
 
@@ -1535,8 +1539,6 @@ void CBus::SendHelloMessage()
         CurHeader.CmdID = Cmd_HelloMessage;
         CurHeader.SrcID = 0;
         CurHeader.DstID = 0;
-        CurHeader.SN = 0;
-        CurHeader.Ret = 0;
         
         CurHeader.Write(buf);
         
@@ -1600,8 +1602,6 @@ int CBus::Send2ClusterByMsg(const ClusterInfo& Info, unsigned int CmdID, const g
     CurHeader.CmdID = CmdID;
     CurHeader.DstID = 0;
     CurHeader.SrcID = 0;
-    CurHeader.SN = 0;
-    CurHeader.Ret = 0;
     CurHeader.Write(acSendBuff);
     
     return Send2Cluster(Info, acSendBuff, CurHeader.PkgLen);
