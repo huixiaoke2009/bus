@@ -266,10 +266,9 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
 {
     int Ret = 0;
     
-    XYHeaderIn CurHeaderIn;
-    CurHeaderIn.Copy(*(const XYHeaderIn*)pCurBuffPos);
+    const XYHeaderIn* pHeader = (const XYHeaderIn*)pCurBuffPos;
 
-    switch(CurHeaderIn.CmdID)
+    switch(pHeader->CmdID)
     {
         case Cmd_Login_Req:
         {
@@ -283,7 +282,16 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
             mm::LoginRsp CurRsp;
             CurRsp.set_ret(1);
 
-            Ret = Send2Server(*pHeader, Cmd_Login_Rsp, GROUP_AUTH, TO_GRP, 0, CurRsp);
+            XYHeaderIn Header;
+            Header.SrcID = GetServerID();
+            Header.CmdID = Cmd_Login_Rsp;
+            Header.SN = pHeader->SN;
+            Header.ConnPos = pHeader->ConnPos;
+            Header.UserID = pHeader->UserID;
+            Header.PkgTime = time(NULL);
+            Header.Ret = 0;
+            
+            Ret = Send2Server(Header, pHeader->SrcID, TO_SRV, 0, CurRsp);
             if(Ret != 0)
             {
                 XF_LOG_WARN(0, 0, "Send2Server failed, Ret=%d", Ret);
@@ -294,7 +302,7 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
         }
         default:
         {
-            XF_LOG_WARN(0, 0, "unknow cmdid %0x", CurHeaderIn.CmdID);
+            XF_LOG_WARN(0, 0, "unknow cmdid %0x", pHeader->CmdID);
             break;
         }
     }
@@ -303,13 +311,13 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
 }
 
 
-int CAuth::Send2Server(const XYHeaderIn& Header, unsigned int CmdID, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message)
+int CAuth::Send2Server(const XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message)
 {
     BusHeader CurBusHeader;
     int HeaderLen = CurBusHeader.GetHeaderLen() + sizeof(XYHeaderIn);
     CurBusHeader.PkgLen = HeaderLen + Message.ByteSize();
     CurBusHeader.CmdID = Cmd_Transfer;
-    CurBusHeader.SrcID = m_ServerID;
+    CurBusHeader.SrcID = GetServerID();
     CurBusHeader.DstID = DstID;
     CurBusHeader.SendType = SendType;
     CurBusHeader.Flag = Flag;

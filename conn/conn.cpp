@@ -1067,13 +1067,13 @@ int CConn::Send2Client(int CurConnPos, const char *pSendBuff, int SendBuffLen)
 }
 
 
-int CConn::Send2Server(const XYHeaderIn& Header, unsigned int CmdID, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message)
+int CConn::Send2Server(const XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message)
 {
     BusHeader CurBusHeader;
     int HeaderLen = CurBusHeader.GetHeaderLen() + sizeof(XYHeaderIn);
     CurBusHeader.PkgLen = HeaderLen + Message.ByteSize();
     CurBusHeader.CmdID = Cmd_Transfer;
-    CurBusHeader.SrcID = m_ServerID;
+    CurBusHeader.SrcID = GetServerID();
     CurBusHeader.DstID = DstID;
     CurBusHeader.SendType = SendType;
     CurBusHeader.Flag = Flag;
@@ -1142,6 +1142,7 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
     
     
     XYHeaderIn* pHeader = (XYHeaderIn*)m_pProcessBuff;
+    pHeader->SrcID = GetServerID(); //客户端过来的请求，默认写上自己的serverid
     pHeader->CmdID = CurHeader.CmdID;
     pHeader->SN = CurHeader.SN;
     pHeader->ConnPos = pConnInfoMap->second->GetConnPos();
@@ -1149,6 +1150,9 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
     pHeader->PkgTime = time(NULL);
     pHeader->Ret = CurHeader.Ret;
 
+    XYHeaderIn CurHeaderIn;
+    CurHeaderIn.Copy(*pHeader);
+            
     //校验CKSUM
     
     
@@ -1185,7 +1189,7 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
             CurReq2.set_userid(UserID);
             CurReq2.set_passwd(strPasswd);
 
-            Ret = Send2Server(*pHeader, Cmd_Login_Req, GROUP_AUTH, TO_GRP, 0, CurReq2);
+            Ret = Send2Server(CurHeaderIn, GROUP_AUTH, TO_GRP, 0, CurReq2);
             if(Ret != 0)
             {
                 XF_LOG_WARN(0, 0, "Send2Server failed, Ret=%d", Ret);
@@ -1212,8 +1216,13 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
 
     switch(CurHeaderIn.CmdID)
     {
+        case Cmd_Login_Rsp:
+        {
+
+        }
         default:
         {
+            // 正常情况下透传给客户端就行了，其它server需要负责组好包
             XYHeader CurHeader;
             CurHeader = CurHeaderIn.CoverToXYHeader(PkgLen);
             CurHeader.Write(m_pSendBuff);

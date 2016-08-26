@@ -64,6 +64,7 @@ typedef struct tagXYHeader
 
 typedef struct tagXYHeaderIn
 {
+    unsigned int SrcID;
     unsigned int CmdID;
     unsigned int SN;
     unsigned int ConnPos;
@@ -85,6 +86,7 @@ typedef struct tagXYHeaderIn
 
     void Copy(const tagXYHeaderIn& o)
     {
+        SrcID = o.SrcID;
         CmdID = o.CmdID;
         SN = o.SN;
         ConnPos = o.ConnPos;
