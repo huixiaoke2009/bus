@@ -99,6 +99,17 @@ typedef struct tagXYHeaderIn
     {
         memset(this, 0x0, sizeof(tagXYHeaderIn));
     }
+
+    tagXYHeaderIn(const tagXYHeaderIn& o)
+    {
+        SrcID = o.SrcID;
+        CmdID = o.CmdID;
+        SN = o.SN;
+        ConnPos = o.ConnPos;
+        UserID = o.UserID;
+        PkgTime = o.PkgTime;
+        Ret = o.Ret;
+    }
     
 }XYHeaderIn;
 

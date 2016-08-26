@@ -1150,8 +1150,7 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
     pHeader->PkgTime = time(NULL);
     pHeader->Ret = CurHeader.Ret;
 
-    XYHeaderIn CurHeaderIn;
-    CurHeaderIn.Copy(*pHeader);
+    XYHeaderIn CurHeaderIn(*pHeader);
             
     //校验CKSUM
     
@@ -1211,27 +1210,59 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
 
 int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
 {
-    XYHeaderIn CurHeaderIn;
-    CurHeaderIn.Copy(*(const XYHeaderIn*)pCurBuffPos);
-
-    switch(CurHeaderIn.CmdID)
+    const XYHeaderIn* pHeader = (const XYHeaderIn*)pCurBuffPos;
+    XYHeaderIn Header(*pHeader);
+    
+    switch(Header.CmdID)
     {
         case Cmd_Login_Rsp:
         {
+            mm::LoginRsp CurRsp;
+            if(!CurRsp.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
+            {
+                XF_LOG_WARN(0, 0, "login pkg parse failed, protocol buffer pkg len = %d", PkgLen-(int)sizeof(XYHeaderIn));
+                return -1;
+            }
 
+            app::LoginRsp CurRsp2;
+            CurRsp2.set_ret(CurRsp.ret());
+
+            XYHeader CurHeader;
+            CurHeader = Header.CoverToXYHeader(PkgLen);
+            CurHeader.Write(m_pSendBuff);
+            int HeaderLen = CurHeader.GetHeadLen();
+            if(!CurRsp2.SerializeToArray(m_pSendBuff+HeaderLen, XY_PKG_MAX_LEN-HeaderLen))
+            {
+                XF_LOG_WARN(0, 0, "pack err msg failed");
+                return -1;
+            }
+
+            unsigned int CurConnPos = Header.ConnPos;
+            if(CurConnPos == 0)
+            {
+                int Ret = GetUserConnPos(Header.UserID, CurConnPos);
+                if(Ret != 0)
+                {
+                    break;
+                }
+            }
+
+            Send2Client(CurConnPos, m_pSendBuff, PkgLen-sizeof(XYHeaderIn)+CurHeader.GetHeadLen());
+            
+            break;
         }
         default:
         {
             // 正常情况下透传给客户端就行了，其它server需要负责组好包
             XYHeader CurHeader;
-            CurHeader = CurHeaderIn.CoverToXYHeader(PkgLen);
+            CurHeader = Header.CoverToXYHeader(PkgLen);
             CurHeader.Write(m_pSendBuff);
             memcpy(m_pSendBuff+CurHeader.GetHeadLen(), pCurBuffPos, PkgLen-sizeof(XYHeaderIn));
 
-            unsigned int CurConnPos = CurHeaderIn.ConnPos;
+            unsigned int CurConnPos = Header.ConnPos;
             if(CurConnPos == 0)
             {
-                int Ret = GetUserConnPos(CurHeaderIn.UserID, CurConnPos);
+                int Ret = GetUserConnPos(Header.UserID, CurConnPos);
                 if(Ret != 0)
                 {
                     break;
