@@ -65,16 +65,4 @@ typedef struct tagBusHeader
 }BusHeader;
 #pragma pack()
 
-typedef struct tagAppHeader
-{
-    unsigned int CmdID;
-    unsigned int SrcID;
-    unsigned int DstID;
-    
-    tagAppHeader()
-    {
-        memset(this, 0x0, sizeof(tagAppHeader));
-    }
-}AppHeader;
-
 #endif

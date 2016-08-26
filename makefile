@@ -1,7 +1,7 @@
 MMLIB = mmlib
 INCLUDE = include
 BUS = bus
-APP = app
+AUTH = auth
 LOGSVR = logsvr
 
 MAKE = make
@@ -13,13 +13,13 @@ all:
 	cd $(MMLIB) && $(MAKE)
 	cd $(INCLUDE) && $(MAKE)
 	cd $(BUS) && $(MAKE)
-	cd $(APP) && $(MAKE)
+	cd $(AUTH) && $(MAKE)
 	cd $(LOGSVR) && $(MAKE)
 	cd $(CONN) && $(MAKE)
 clean:
 	cd $(MMLIB) && $(MAKE) $(CLEAN)
 	cd $(INCLUDE) && $(MAKE) $(CLEAN)
 	cd $(BUS) && $(MAKE) $(CLEAN)
-	cd $(APP) && $(MAKE) $(CLEAN)
+	cd $(AUTH) && $(MAKE) $(CLEAN)
 	cd $(LOGSVR) && $(MAKE) $(CLEAN)
 	cd $(CONN) && $(MAKE) $(CLEAN)

@@ -980,7 +980,7 @@ int CConn::Run()
             Ret = m_RecvQueue.OutQueue(m_pProcessBuff, &SendLen);
             if (Ret == 0)
             {
-                XF_LOG_TRACE(0, 0, "ConnRun|OutQueue|%d|%s", SendLen, CStrTool::Str2Hex(m_pProcessBuff, SendLen));
+                XF_LOG_TRACE(0, 0, "Run|OutQueue|%d|%s", SendLen, CStrTool::Str2Hex(m_pProcessBuff, SendLen));
                 
                 //需要发包哦~~
                 EmptyFlag = 0;
@@ -992,7 +992,7 @@ int CConn::Run()
                 Ret = DealPkg(pSendBuff, PkgLen);
                 if(Ret != 0)
                 {
-                    XF_LOG_WARN(0, 0, "DealPkg failed, Ret=%d", Ret);
+                    XF_LOG_WARN(0, 0, "Run|DealPkg failed, Ret=%d", Ret);
                     continue;
                 }
             }
@@ -1003,7 +1003,7 @@ int CConn::Run()
             else
             {
                 //出错了
-                XF_LOG_WARN(0, 0, "out queue failed, ret=%d, errmsg=%s", Ret, m_RecvQueue.GetErrMsg());
+                XF_LOG_WARN(0, 0, "Run|OutQueue failed, Ret=%d, errmsg=%s", Ret, m_RecvQueue.GetErrMsg());
                 break;
             }
         }
@@ -1160,6 +1160,11 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
     {
         //暂时不考虑
         pProcessBuff = m_pProcessBuff;
+    }
+
+    if(pHeader->CmdID != Cmd_Login_Req && pConnInfoMap->second->GetConnType() != CONN_AUTH)
+    {
+        return CurHeader.PkgLen;
     }
 
     switch(pHeader->CmdID)

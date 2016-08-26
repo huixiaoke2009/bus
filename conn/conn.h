@@ -15,8 +15,7 @@ enum CONNTYPE
 {
     //连接类型：未认证，认证，webpcl
     CONN_UNAUTH = 0,
-    CONN_AUTH,
-    CONN_WEBPCL,
+    CONN_AUTH = 1,
 };
 
 typedef struct tagConnMeta
