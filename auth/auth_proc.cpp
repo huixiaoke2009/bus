@@ -225,7 +225,7 @@ int CAuth::Run()
         Ret = m_RecvQueue.OutQueue(pRecvBuff, &RecvLen);
         if (Ret == m_RecvQueue.E_SHM_QUEUE_EMPTY)
         {
-            continue;
+            
         }
         else if(Ret != 0)
         {

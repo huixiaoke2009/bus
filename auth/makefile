@@ -5,10 +5,10 @@ CXXFLAGS += -Wall -D_GNU_SOURCE  -g -DLINUX -O0 -fPIC -Wno-invalid-offsetof
 INCS = -I. -I../include -I../mmlib
 LIBS = ../mmlib/mmlib.a ../include/bus.a /usr/local/lib/libprotobuf.a
 
-TARGETS = app
+TARGETS = auth
 all:$(TARGETS)
 
-app:auth_main.o auth_proc.o
+auth:auth_main.o auth_proc.o
 	$(CXX) $^ $(LIBS) -o $@ -lz
 
 %.o: %.cpp
