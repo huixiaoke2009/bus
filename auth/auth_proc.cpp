@@ -264,8 +264,6 @@ int CAuth::Run()
 
 int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
 {
-    int Ret = 0;
-    
     const XYHeaderIn* pHeader = (const XYHeaderIn*)pCurBuffPos;
 
     switch(pHeader->CmdID)
