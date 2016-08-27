@@ -10,7 +10,7 @@
 #include <time.h>
 #include <vector>
 
-#include "auth_proc.h"
+#include "gns_proc.h"
 #include "log/log.h"
 #include "util/util.h"
 #include "ini_file/ini_file.h"
@@ -59,13 +59,14 @@ static void SigHandler(int iSigNo)
 }
 
 
-CAuth::CAuth()
+CGns::CGns()
 {
     m_ServerID = 0;
     m_pSendBuff = NULL;
+    m_MaxUserNodeNum = 0;
 }
 
-CAuth::~CAuth()
+CGns::~CGns()
 {
     if(m_pSendBuff)
     {
@@ -74,7 +75,7 @@ CAuth::~CAuth()
 }
 
 
-int CAuth::Init(const char *pConfFile)
+int CGns::Init(const char *pConfFile)
 {
     //安装信号量
     StopFlag = false;
@@ -103,13 +104,17 @@ int CAuth::Init(const char *pConfFile)
     int LogLevel = 0;
     char LogPath[1024] = {0};
 
+    int UserShmKey = 0;
+    int UserShmSize = 0;
     char BusConfPath[256] = {0};
 
     if (IniFile.IsValid())
     {
-        IniFile.GetInt("AUTH", "ServerID", 0, (int*)&m_ServerID);
-        IniFile.GetString("AUTH", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
-        
+        IniFile.GetInt("GNS", "ServerID", 0, (int*)&m_ServerID);
+        IniFile.GetString("GNS", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
+        IniFile.GetInt("GNS", "UserShmKey", 0, &UserShmKey);
+        IniFile.GetInt("GNS", "UserShmSize", 0, &UserShmSize);
+        IniFile.GetInt("GNS", "NodeNum", 0, &m_MaxUserNodeNum);
         IniFile.GetString("LOG", "ModuleName", "app", ModuleName, sizeof(ModuleName));
         IniFile.GetInt("LOG", "LogLocal", 1, &LogLocal);
         IniFile.GetInt("LOG", "LogLevel", 3, &LogLevel);
@@ -206,11 +211,101 @@ int CAuth::Init(const char *pConfFile)
         m_pSendBuff = (char*)malloc(XY_PKG_MAX_LEN);
     }
     
+    if (UserShmKey == 0)
+    {
+        printf("ERR:conf GNS/UserShmKey is not valid\n");
+        return -1;
+    }
+
+    if (UserShmSize == 0)
+    {
+        printf("ERR:conf GNS/UserShmSize is not valid\n");
+        return -1;
+    }
+    
+    if (m_MaxUserNodeNum == 0)
+    {
+        printf("ERR:conf GNS/NodeNum is not valid\n");
+        return -1;
+    }
+
+    int UserMemHeadSize = USER_MEM_HEAD_SIZE;
+    int UserInfoMemSize = m_UserInfoMap.CalcSize(m_MaxUserNodeNum, m_MaxUserNodeNum);
+
+    int UserMemNeed =  UserInfoMemSize + UserMemHeadSize;
+    if (UserMemNeed > UserShmSize)
+    {
+        printf("ERR:conf USER/UserShmSize[%d] is not enough, need %d\n", UserShmSize, UserMemNeed);
+        return -1;
+    }
+
+    printf("UserMemNeed=%d, UserShmSize=%d\n", UserMemNeed, UserShmSize);
+
+    Ret = m_UserMem.Create(UserShmKey, UserShmSize, 0666);
+    if ((Ret != m_UserMem.SUCCESS)&&(Ret != m_UserMem.SHM_EXIST))
+    {
+        printf("ERR:create user shm failed, key=%d, size=%d, ret=%d\n", UserShmKey, UserShmSize, Ret);
+        return -1;
+    }
+
+    Ret = m_UserMem.Attach();
+    if (Ret != m_UserMem.SUCCESS)
+    {
+        printf("ERR:attach user shm failed, key=%d, size=%d, ret=%d\n", UserShmKey, UserShmSize, Ret);
+        return -1;
+    }
+
+    printf("INFO:user shm create succ\n");
+
+    m_pUserHead = (UserMemHead *)m_UserMem.GetMem();
+    void *pUserInfoMem = ((char *)m_UserMem.GetMem()) + UserMemHeadSize;
+
+    if (m_pUserHead == NULL)
+    {
+        printf("ERR:create shm failed\n");
+        return -1;
+    }
+
+    bool ClearFlag = false;
+    if (memcmp(m_pUserHead->Magic, USER_MEM_MAGIC, sizeof(m_pUserHead->Magic)) != 0)
+    {
+        ClearFlag = true;
+        memset(m_pUserHead, 0, USER_MEM_HEAD_SIZE);
+        memcpy(m_pUserHead->Magic, USER_MEM_MAGIC, sizeof(m_pUserHead->Magic));
+        printf("WARN:user map shoud clear\n");
+    }
+
+    Ret = m_UserInfoMap.Init(pUserInfoMem, UserInfoMemSize, m_MaxUserNodeNum, m_MaxUserNodeNum);
+    if (Ret != 0)
+    {
+        printf("ERR:init user info shm failed, ret=%d\n", Ret);
+        return -1;
+    }
+
+    printf("INFO:user info map init succ\n");
+
+    if (ClearFlag)
+    {
+        m_UserInfoMap.Clear();
+        ClearFlag = false;
+    }
+
+    Ret = m_UserInfoMap.Verify();
+    if (Ret != 0)
+    {
+        printf("WARN:user info verify failed, Ret = %d\n", Ret);
+        return -1;
+    }
+    else
+    {
+        printf("INFO:user info map verify succ\n");
+    }
+
     return 0;
 }
 
 
-int CAuth::Run()
+int CGns::Run()
 {
     int Ret = 0;
     
@@ -262,7 +357,7 @@ int CAuth::Run()
 }
 
 
-int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
+int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
 {
     int Ret = 0;
     
@@ -270,9 +365,9 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
 
     switch(pHeader->CmdID)
     {
-        case Cmd_Login_Req:
+        case Cmd_GNS_Register_Req:
         {
-            mm::LoginReq CurReq;
+            mm::GNSRegisterReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
             {
                 XF_LOG_WARN(0, 0, "login pkg parse failed, protocol buffer pkg len = %d", PkgLen-(int)sizeof(XYHeaderIn));
@@ -280,16 +375,38 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
             }
 
             uint64_t UserID = CurReq.userid();
-            string strPasswd = CurReq.passwd();
-            int Result = LoginCheck(UserID, strPasswd);
+            int ServerID = CurReq.serverid();
+            int ConnPos = CurReq.connpos();
 
-            mm::LoginRsp CurRsp;
+            ShmUserInfo Info;
+            Info.UserID = UserID;
+            Info.ServerID = ServerID;
+            Info.ConnPos = ConnPos;
+            Info.Status = GNS_USER_STATUS_ACTIVE;
+
+            ShmUserInfo tmp;
+            Ret = m_UserInfoMap.Get(UserID, tmp);
+            if(Ret == 0 && tmp.Status == GNS_USER_STATUS_ACTIVE)
+            {
+                // TODO:通知其它连接层断开连接，不需要对方确认
+            }
+            
+            Ret = m_UserInfoMap.Insert(UserID, Info);
+            if(Ret != 0)
+            {
+                XF_LOG_WARN(0, 0, "m_UserInfoMap insert failed, Ret=%d, UserID=%ld", Ret, UserID);
+                return -1;
+            }
+            
+            mm::GNSRegisterRsp CurRsp;
             CurRsp.set_userid(UserID);
-            CurRsp.set_ret(Result);
+            CurRsp.set_serverid(ServerID);
+            CurRsp.set_connpos(ConnPos);
+            CurRsp.set_ret(1);
 
             XYHeaderIn Header;
             Header.SrcID = GetServerID();
-            Header.CmdID = Cmd_Login_Rsp;
+            Header.CmdID = Cmd_GNS_Register_Rsp;
             Header.SN = pHeader->SN;
             Header.ConnPos = pHeader->ConnPos;
             Header.UserID = pHeader->UserID;
@@ -316,7 +433,7 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
 }
 
 
-int CAuth::Send2Server(const XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message)
+int CGns::Send2Server(const XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message)
 {
     BusHeader CurBusHeader;
     int HeaderLen = CurBusHeader.GetHeaderLen() + sizeof(XYHeaderIn);
@@ -357,7 +474,3 @@ int CAuth::Send2Server(const XYHeaderIn& Header, unsigned int DstID, char SendTy
 }
 
 
-int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd)
-{
-    return 1;
-}

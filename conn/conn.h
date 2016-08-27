@@ -141,6 +141,8 @@ class CConn
         int ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
         int DealPkg(const char *pCurBuffPos, int RecvLen);
         int GetUserConnPos(uint64_t UserID, unsigned int &ConnPos);
+        int GetConnType(unsigned int ConnPos, unsigned int& Type);
+        int SetConnType(unsigned int ConnPos, unsigned int Type);
     private:
         // EPOLL句柄
         int m_EpollFD;

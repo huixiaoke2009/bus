@@ -6,12 +6,11 @@
 #define _HEADER_H_
 
 #pragma pack(1)
-//[PkgSize:4Byte][CmdID:4Byte][UserID:8Byte][SN:4Byte][CkSum:2Byte][Ret:2Byte][Compresse:1Byte][PkgBody:PkgSize-25]
+//[PkgSize:4Byte][CmdID:4Byte][SN:4Byte][CkSum:2Byte][Ret:2Byte][Compresse:1Byte][PkgBody:PkgSize-25]
 typedef struct tagXYHeader
 {
     unsigned int PkgLen;
     unsigned int CmdID;
-    unsigned long long UserID;
     unsigned int SN;
     unsigned short CkSum;
     unsigned short Ret;
@@ -22,7 +21,6 @@ typedef struct tagXYHeader
         int Offset = 0;
         Offset += mmlib::CBuffTool::WriteInt(Buff + Offset, PkgLen);
         Offset += mmlib::CBuffTool::WriteInt(Buff + Offset, CmdID);
-        Offset += mmlib::CBuffTool::WriteLongLong(Buff + Offset, UserID);
         Offset += mmlib::CBuffTool::WriteInt(Buff + Offset, SN);
         Offset += mmlib::CBuffTool::WriteShort(Buff + Offset, CkSum);
         Offset += mmlib::CBuffTool::WriteShort(Buff + Offset, Ret);
@@ -35,7 +33,6 @@ typedef struct tagXYHeader
         int Offset = 0;
         Offset += mmlib::CBuffTool::ReadInt(Buff + Offset, PkgLen);
         Offset += mmlib::CBuffTool::ReadInt(Buff + Offset, CmdID);
-        Offset += mmlib::CBuffTool::ReadLongLong(Buff + Offset, UserID);
         Offset += mmlib::CBuffTool::ReadInt(Buff + Offset, SN);
         Offset += mmlib::CBuffTool::ReadShort(Buff + Offset, CkSum);
         Offset += mmlib::CBuffTool::ReadShort(Buff + Offset, Ret);
@@ -45,14 +42,13 @@ typedef struct tagXYHeader
 
     int GetHeadLen()
     {
-        return 25;
+        return 17;
     }
 
     tagXYHeader()
     {
         PkgLen = 0;
         CmdID = 0;
-        UserID = 0;
         SN = 0;
         CkSum = 0;
         Ret = 0;
@@ -77,7 +73,6 @@ typedef struct tagXYHeaderIn
         XYHeader TmpHeader;
         TmpHeader.PkgLen = PkgLen - sizeof(tagXYHeaderIn) + TmpHeader.GetHeadLen();
         TmpHeader.CmdID = CmdID;
-        TmpHeader.UserID = UserID;
         TmpHeader.SN = SN;
         TmpHeader.Ret = Ret;
 

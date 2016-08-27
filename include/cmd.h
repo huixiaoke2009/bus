@@ -27,4 +27,11 @@ const unsigned int Cmd_Login_Rsp = 0x00010002;
 
 
 
+/******************* GNS模块 *******************/
+const unsigned int Cmd_GNS_Register_Req = 0x00020001;
+const unsigned int Cmd_GNS_Register_Rsp = 0x00020002;
+
+const unsigned int Cmd_GNS_Disconnect_Req = 0x00020003;
+
+
 #endif

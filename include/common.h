@@ -11,6 +11,8 @@ const int GROUP_CONN = 100;
 const int GROUP_AUTH = 200;
 
 
+const int SERVER_GNS = 301;
+
 
 
 

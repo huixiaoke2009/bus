@@ -1111,7 +1111,6 @@ int CConn::Send2Server(const XYHeaderIn& Header, unsigned int DstID, char SendTy
 int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap)
 {
     int Offset = 0;
-    int Ret = 0;
     XYHeader CurHeader;
 
     //包头长度还不够
@@ -1146,10 +1145,10 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
     pHeader->CmdID = CurHeader.CmdID;
     pHeader->SN = CurHeader.SN;
     pHeader->ConnPos = pConnInfoMap->second->GetConnPos();
-    pHeader->UserID = CurHeader.UserID;
     pHeader->PkgTime = time(NULL);
     pHeader->Ret = CurHeader.Ret;
-
+    pHeader->UserID = pConnInfoMap->second->GetUserID();
+    
     XYHeaderIn CurHeaderIn(*pHeader);
             
     //校验CKSUM
@@ -1188,12 +1187,7 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
             CurReq2.set_userid(UserID);
             CurReq2.set_passwd(strPasswd);
 
-            Ret = Send2Server(CurHeaderIn, GROUP_AUTH, TO_GRP, 0, CurReq2);
-            if(Ret != 0)
-            {
-                XF_LOG_WARN(0, 0, "Send2Server failed, Ret=%d", Ret);
-                return -1;
-            }
+            Send2Server(CurHeaderIn, GROUP_AUTH, TO_GRP, 0, CurReq2);
 
             break;
         }
@@ -1217,6 +1211,8 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
     {
         case Cmd_Login_Rsp:
         {
+            int ConnPos = Header.ConnPos;
+            
             mm::LoginRsp CurRsp;
             if(!CurRsp.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
             {
@@ -1224,11 +1220,102 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 return -1;
             }
 
-            app::LoginRsp CurRsp2;
-            CurRsp2.set_ret(CurRsp.ret());
+            uint64_t UserID = CurRsp.userid();
+            int Result = CurRsp.ret();
+            
+            if(Result != 1)
+            {
+                // 不成功,返回客户端失败原因
+                
+                app::LoginRsp CurRsp2;
+                XYHeader CurHeader;
+                CurHeader.PkgLen = PkgLen - sizeof(tagXYHeaderIn) + CurHeader.GetHeadLen();
+                CurHeader.CmdID = Cmd_Login_Rsp;
+                CurHeader.SN = Header.SN;
+                CurHeader.CkSum = 0;
+                CurHeader.Ret = Header.Ret;
+                CurHeader.Compresse = 0;
+                CurHeader.Write(m_pSendBuff);
+                int HeaderLen = CurHeader.GetHeadLen();
+                if(!CurRsp2.SerializeToArray(m_pSendBuff+HeaderLen, XY_PKG_MAX_LEN-HeaderLen))
+                {
+                    XF_LOG_WARN(0, 0, "pack err msg failed");
+                    return -1;
+                }
 
+                Send2Client(ConnPos, m_pSendBuff, PkgLen-sizeof(XYHeaderIn)+CurHeader.GetHeadLen());
+            }
+            else
+            {
+                // 成功,去GNS注册
+                mm::GNSRegisterReq CurReq;
+                CurReq.set_userid(UserID);
+                CurReq.set_serverid(GetServerID());
+                CurReq.set_connpos(ConnPos);
+
+                XYHeaderIn CurHeader;
+                CurHeader.SrcID = GetServerID();
+                CurHeader.CmdID = Cmd_GNS_Register_Req;
+                CurHeader.SN = Header.SN;
+                CurHeader.ConnPos = ConnPos;
+                CurHeader.UserID = Header.UserID;
+                CurHeader.PkgTime = time(NULL);
+                CurHeader.Ret = 0;
+
+                if(!CurReq.SerializeToArray(m_pSendBuff+sizeof(XYHeaderIn), XY_PKG_MAX_LEN-sizeof(XYHeaderIn)))
+                {
+                    XF_LOG_WARN(0, 0, "pack err msg failed");
+                    return -1;
+                }
+
+                Send2Server(CurHeader, SERVER_GNS, TO_SRV, 0, CurReq);   
+            }
+            
+            break;
+        }
+        case Cmd_GNS_Register_Rsp:
+        {
+            mm::GNSRegisterRsp CurRsp;
+            if(!CurRsp.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
+            {
+                XF_LOG_WARN(0, 0, "login pkg parse failed, protocol buffer pkg len = %d", PkgLen-(int)sizeof(XYHeaderIn));
+                return -1;
+            }
+
+            app::LoginRsp CurRsp2;
+            
+            uint64_t UserID = CurRsp.userid();
+            int ServerID = CurRsp.serverid();
+            unsigned int ConnPos = CurRsp.connpos();
+            int Result = CurRsp.ret();
+            
+            if(Result == 1 && ServerID == GetServerID())
+            {
+                std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(ConnPos);
+                if(iter == m_PosConnMap.end())
+                {
+                    return -1;
+                }
+                
+                iter->second->SetConnType(CONN_AUTH);
+                iter->second->SetUserID(UserID);
+
+                m_UserIDConnMap[UserID] = iter->second;
+                
+                CurRsp2.set_ret(1);
+            }
+            else
+            {
+                CurRsp2.set_ret(0);
+            }
+            
             XYHeader CurHeader;
-            CurHeader = Header.CoverToXYHeader(PkgLen);
+            CurHeader.PkgLen = PkgLen - sizeof(tagXYHeaderIn) + CurHeader.GetHeadLen();
+            CurHeader.CmdID = Cmd_Login_Rsp;
+            CurHeader.SN = Header.SN;
+            CurHeader.CkSum = 0;
+            CurHeader.Ret = Header.Ret;
+            CurHeader.Compresse = 0;
             CurHeader.Write(m_pSendBuff);
             int HeaderLen = CurHeader.GetHeadLen();
             if(!CurRsp2.SerializeToArray(m_pSendBuff+HeaderLen, XY_PKG_MAX_LEN-HeaderLen))
@@ -1237,17 +1324,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 return -1;
             }
 
-            unsigned int CurConnPos = Header.ConnPos;
-            if(CurConnPos == 0)
-            {
-                int Ret = GetUserConnPos(Header.UserID, CurConnPos);
-                if(Ret != 0)
-                {
-                    break;
-                }
-            }
-
-            Send2Client(CurConnPos, m_pSendBuff, PkgLen-sizeof(XYHeaderIn)+CurHeader.GetHeadLen());
+            Send2Client(ConnPos, m_pSendBuff, PkgLen-sizeof(XYHeaderIn)+CurHeader.GetHeadLen());
             
             break;
         }
@@ -1281,7 +1358,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
 
 int CConn::GetUserConnPos(uint64_t UserID, unsigned int &ConnPos)
 {
-    std::map<unsigned long long, CConnInfo*> ::iterator iter = m_UserIDConnMap.find(UserID);
+    std::map<unsigned long long, CConnInfo*>::iterator iter = m_UserIDConnMap.find(UserID);
     if(iter == m_UserIDConnMap.end())
     {
         return -1;
@@ -1290,3 +1367,34 @@ int CConn::GetUserConnPos(uint64_t UserID, unsigned int &ConnPos)
 
     return 0;
 }
+
+
+
+int CConn::GetConnType(unsigned int ConnPos, unsigned int& Type)
+{
+    std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(ConnPos);
+    if(iter == m_PosConnMap.end())
+    {
+        return -1;
+    }
+    
+    Type = iter->second->GetConnType();
+
+    return 0;
+}
+
+
+int CConn::SetConnType(unsigned int ConnPos, unsigned int Type)
+{
+    std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(ConnPos);
+    if(iter == m_PosConnMap.end())
+    {
+        return -1;
+    }
+    
+    iter->second->SetConnType(Type);
+
+    return 0;
+}
+
+
