@@ -24,11 +24,11 @@ while(1):
     recv_header = recv_data[0:XY_HEADER_LEN]
     recv_content = recv_data[XY_HEADER_LEN:];
     PkgLen, CmdID, SN, CkSum, Ret, Compresse = struct.unpack(">IIIHHb", recv_header);
-    #print PkgLen, CmdID, SN, CkSum, Ret, Compresse
+    print PkgLen, CmdID, SN, CkSum, Ret, Compresse
     CurRsp = app_pb2.LoginRsp();
     CurRsp.ParseFromString(recv_content)
-    print CurRsp.userid, CurRsp.ret;
+    print CurRsp.ret;
     if CurRsp.ret != 1:
         print 'login error'
-    time.sleep(10000)
+    time.sleep(1)
 s.close();

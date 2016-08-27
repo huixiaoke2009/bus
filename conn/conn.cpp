@@ -1228,6 +1228,8 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 // 不成功,返回客户端失败原因
                 
                 app::LoginRsp CurRsp2;
+                CurRsp2.set_ret(Result);
+                
                 XYHeader CurHeader;
                 CurHeader.PkgLen = PkgLen - sizeof(tagXYHeaderIn) + CurHeader.GetHeadLen();
                 CurHeader.CmdID = Cmd_Login_Rsp;
@@ -1310,7 +1312,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             }
             
             XYHeader CurHeader;
-            CurHeader.PkgLen = PkgLen - sizeof(tagXYHeaderIn) + CurHeader.GetHeadLen();
+            CurHeader.PkgLen = CurRsp2.ByteSize() + CurHeader.GetHeadLen();
             CurHeader.CmdID = Cmd_Login_Rsp;
             CurHeader.SN = Header.SN;
             CurHeader.CkSum = 0;
@@ -1324,7 +1326,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 return -1;
             }
 
-            Send2Client(ConnPos, m_pSendBuff, PkgLen-sizeof(XYHeaderIn)+CurHeader.GetHeadLen());
+            Send2Client(ConnPos, m_pSendBuff, CurHeader.PkgLen);
             
             break;
         }
