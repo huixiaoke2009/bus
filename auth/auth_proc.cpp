@@ -296,12 +296,7 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
             Header.PkgTime = time(NULL);
             Header.Ret = 0;
             
-            Ret = Send2Server(Header, pHeader->SrcID, TO_SRV, 0, CurRsp);
-            if(Ret != 0)
-            {
-                XF_LOG_WARN(0, 0, "Send2Server failed, Ret=%d", Ret);
-                return -1;
-            }
+            Send2Server(Header, pHeader->SrcID, TO_SRV, 0, CurRsp);
             
             break;
         }

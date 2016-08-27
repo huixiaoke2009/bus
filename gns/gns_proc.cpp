@@ -386,17 +386,32 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
 
             ShmUserInfo tmp;
             Ret = m_UserInfoMap.Get(UserID, tmp);
-            if(Ret == 0 && tmp.Status == GNS_USER_STATUS_ACTIVE)
+            if(Ret == 0)
             {
                 // TODO:通知其它连接层断开连接，不需要对方确认
+                if(tmp.Status == GNS_USER_STATUS_ACTIVE)
+                {
+
+                }
+
+                Ret = m_UserInfoMap.Update(UserID, Info);
+                if(Ret != 0)
+                {
+                    XF_LOG_WARN(0, 0, "m_UserInfoMap update failed, Ret=%d, UserID=%ld", Ret, UserID);
+                    return -1;
+                }
             }
-            
-            Ret = m_UserInfoMap.Insert(UserID, Info);
-            if(Ret != 0)
+            else
             {
-                XF_LOG_WARN(0, 0, "m_UserInfoMap insert failed, Ret=%d, UserID=%ld", Ret, UserID);
-                return -1;
+                Ret = m_UserInfoMap.Insert(UserID, Info);
+                if(Ret != 0)
+                {
+                    XF_LOG_WARN(0, 0, "m_UserInfoMap insert failed, Ret=%d, UserID=%ld", Ret, UserID);
+                    return -1;
+                }
             }
+
+            
             
             mm::GNSRegisterRsp CurRsp;
             CurRsp.set_userid(UserID);
@@ -413,12 +428,7 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
             Header.PkgTime = time(NULL);
             Header.Ret = 0;
             
-            Ret = Send2Server(Header, pHeader->SrcID, TO_SRV, 0, CurRsp);
-            if(Ret != 0)
-            {
-                XF_LOG_WARN(0, 0, "Send2Server failed, Ret=%d", Ret);
-                return -1;
-            }
+            Send2Server(Header, pHeader->SrcID, TO_SRV, 0, CurRsp);
             
             break;
         }
