@@ -30,7 +30,7 @@ typedef struct tagShmUserInfo
 {
     uint64_t UserID;
     int ServerID;
-    int ConnPos;
+    unsigned int ConnPos;
     int Status;
 
     tagShmUserInfo()

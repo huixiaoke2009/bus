@@ -1253,7 +1253,7 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
     {
         if(Info.pQueue != NULL)
         {
-            Ret = Info.pQueue->InQueue(m_pProcessBuff, RecvLen);
+            Ret = Info.pQueue->InQueue(m_pProcessBuff, PkgLen);
             if(Ret == Info.pQueue->E_SHM_QUEUE_FULL)
             {
                 //相当于不要这个包了
@@ -1320,7 +1320,7 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
     
     int PkgLen = CurHeader.PkgLen;
     //接收到的数据不够一个包
-    if(RecvLen < PkgLen)
+    if(RecvLen != PkgLen)
     {
         XF_LOG_WARN(0, 0, "RecvLen < PkgLen, %d|%d", RecvLen, PkgLen);
         return -1;
@@ -1393,7 +1393,7 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
     {
         if(Info.pQueue != NULL)
         {
-            Ret = Info.pQueue->InQueue(pCurBuffPos, RecvLen);
+            Ret = Info.pQueue->InQueue(pCurBuffPos, PkgLen);
             if(Ret == Info.pQueue->E_SHM_QUEUE_FULL)
             {
                 XF_LOG_WARN(0, 0, "ShmQueue is full, %0x|%d", Info.QueueKey, Info.QueueSize);
@@ -1419,7 +1419,7 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
         map<unsigned int, ClusterInfo>::iterator iter2 = m_mapClusterInfo.find(Info.ClusterID);
         if(iter2 != m_mapClusterInfo.end())
         {
-            Ret = Send2Cluster(iter2->second, pCurBuffPos, RecvLen);
+            Ret = Send2Cluster(iter2->second, pCurBuffPos, PkgLen);
             if(Ret != 0)
             {
                 XF_LOG_WARN(0, 0, "Send2Cluster failed, %d", Info.ClusterID);
