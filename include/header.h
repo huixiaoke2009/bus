@@ -58,6 +58,7 @@ typedef struct tagXYHeader
 }XYHeader;
 #pragma pack()
 
+#pragma pack(1)
 typedef struct tagXYHeaderIn
 {
     unsigned int SrcID;
@@ -67,29 +68,7 @@ typedef struct tagXYHeaderIn
     unsigned long long UserID;
     unsigned long long PkgTime;
     unsigned short Ret;
-
-    XYHeader CoverToXYHeader(int PkgLen)
-    {
-        XYHeader TmpHeader;
-        TmpHeader.PkgLen = PkgLen - sizeof(tagXYHeaderIn) + TmpHeader.GetHeadLen();
-        TmpHeader.CmdID = CmdID;
-        TmpHeader.SN = SN;
-        TmpHeader.Ret = Ret;
-
-        return TmpHeader;
-    }
-
-    void Copy(const tagXYHeaderIn& o)
-    {
-        SrcID = o.SrcID;
-        CmdID = o.CmdID;
-        SN = o.SN;
-        ConnPos = o.ConnPos;
-        UserID = o.UserID;
-        PkgTime = o.PkgTime;
-        Ret = o.Ret;
-    }
-
+    
     tagXYHeaderIn()
     {
         memset(this, 0x0, sizeof(tagXYHeaderIn));
@@ -105,9 +84,63 @@ typedef struct tagXYHeaderIn
         PkgTime = o.PkgTime;
         Ret = o.Ret;
     }
+
+    void Copy(const tagXYHeaderIn& o)
+    {
+        SrcID = o.SrcID;
+        CmdID = o.CmdID;
+        SN = o.SN;
+        ConnPos = o.ConnPos;
+        UserID = o.UserID;
+        PkgTime = o.PkgTime;
+        Ret = o.Ret;
+    }
+
+    int GetHeaderLen()
+    {
+        return 34;
+    }
+    
+    int Write(char *Buff)
+    {
+        int Offset = 0;
+        Offset += mmlib::CBuffTool::WriteInt(Buff + Offset, SrcID);
+        Offset += mmlib::CBuffTool::WriteInt(Buff + Offset, CmdID);
+        Offset += mmlib::CBuffTool::WriteInt(Buff + Offset, SN);
+        Offset += mmlib::CBuffTool::WriteInt(Buff + Offset, ConnPos);
+        Offset += mmlib::CBuffTool::WriteLongLong(Buff + Offset, UserID);
+        Offset += mmlib::CBuffTool::WriteLongLong(Buff + Offset, PkgTime);
+        Offset += mmlib::CBuffTool::WriteShort(Buff + Offset, Ret);
+        return Offset;
+    }
+
+    int Read(const char *Buff)
+    {
+        int Offset = 0;
+        Offset += mmlib::CBuffTool::ReadInt(Buff + Offset, SrcID);
+        Offset += mmlib::CBuffTool::ReadInt(Buff + Offset, CmdID);
+        Offset += mmlib::CBuffTool::ReadInt(Buff + Offset, SN);
+        Offset += mmlib::CBuffTool::ReadInt(Buff + Offset, ConnPos);
+        Offset += mmlib::CBuffTool::ReadLongLong(Buff + Offset, UserID);
+        Offset += mmlib::CBuffTool::ReadLongLong(Buff + Offset, PkgTime);
+        Offset += mmlib::CBuffTool::ReadShort(Buff + Offset, Ret);
+        return Offset;
+    }
+
+    
+    XYHeader CoverToXYHeader(int PkgLen)
+    {
+        XYHeader TmpHeader;
+        TmpHeader.PkgLen = PkgLen - GetHeaderLen() + TmpHeader.GetHeadLen();
+        TmpHeader.CmdID = CmdID;
+        TmpHeader.SN = SN;
+        TmpHeader.Ret = Ret;
+
+        return TmpHeader;
+    }
     
 }XYHeaderIn;
-
+#pragma pack(0)
 
 #endif
 

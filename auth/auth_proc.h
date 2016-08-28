@@ -21,7 +21,7 @@ class CAuth
         int GetServerID(){return m_ServerID;}
     private:
         int DealPkg(const char *pCurBuffPos, int PkgLen);
-        int Send2Server(const XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message);
+        int Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message);
         int LoginCheck(uint64_t UserID, const std::string& strPasswd);
     private:
         unsigned int m_ServerID;

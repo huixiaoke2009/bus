@@ -1005,7 +1005,7 @@ int CConn::Run()
                 CurBusHeader.Read(m_pProcessBuff);
                 int PkgLen = SendLen - CurBusHeader.GetHeaderLen();
                 char *pSendBuff = m_pProcessBuff + CurBusHeader.GetHeaderLen();
-
+                
                 Ret = DealPkg(pSendBuff, PkgLen);
                 if(Ret != 0)
                 {
@@ -1084,10 +1084,10 @@ int CConn::Send2Client(int CurConnPos, const char *pSendBuff, int SendBuffLen)
 }
 
 
-int CConn::Send2Server(const XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message)
+int CConn::Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message)
 {
     BusHeader CurBusHeader;
-    int HeaderLen = CurBusHeader.GetHeaderLen() + sizeof(XYHeaderIn);
+    int HeaderLen = CurBusHeader.GetHeaderLen() + Header.GetHeaderLen();
     CurBusHeader.PkgLen = HeaderLen + Message.ByteSize();
     CurBusHeader.CmdID = Cmd_Transfer;
     CurBusHeader.SrcID = GetServerID();
@@ -1096,9 +1096,8 @@ int CConn::Send2Server(const XYHeaderIn& Header, unsigned int DstID, char SendTy
     CurBusHeader.Flag = Flag;
     CurBusHeader.Write(m_pSendBuff);
 
-    XYHeaderIn* pHeader = (XYHeaderIn*)(m_pSendBuff+CurBusHeader.GetHeaderLen());
-    pHeader->Copy(Header);
-
+    Header.Write(m_pSendBuff);
+    
     if(!Message.SerializeToArray(m_pSendBuff+HeaderLen, XY_PKG_MAX_LEN-HeaderLen))
     {
         XF_LOG_WARN(0, 0, "pack err msg failed");
@@ -1129,7 +1128,8 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
 {
     int Offset = 0;
     XYHeader CurHeader;
-
+    XYHeaderIn CurHeaderIn;
+    
     //包头长度还不够
     if (RecvLen < CurHeader.GetHeadLen())
     {
@@ -1140,7 +1140,7 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
     Offset = CurHeader.Read(pCurBuffPos);
 
     //判断包长
-    if ((CurHeader.PkgLen < (unsigned int)CurHeader.GetHeadLen()) || (CurHeader.PkgLen > (XY_PKG_MAX_LEN - sizeof(XYHeaderIn))))
+    if ((CurHeader.PkgLen < (unsigned int)CurHeader.GetHeadLen()) || ((int)CurHeader.PkgLen > (XY_PKG_MAX_LEN - CurHeaderIn.GetHeaderLen())))
     {
         XF_LOG_WARN(0, 0, "pkg len is not valid, len=%d", CurHeader.PkgLen);
         return -1;
@@ -1154,20 +1154,17 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
 
     // 除去所有包头的长度
     int PkgInLen = CurHeader.PkgLen-CurHeader.GetHeadLen();
-    memcpy(m_pProcessBuff+sizeof(XYHeaderIn), pCurBuffPos+CurHeader.GetHeadLen(), PkgInLen);
-    
-    
-    XYHeaderIn* pHeader = (XYHeaderIn*)m_pProcessBuff;
-    pHeader->SrcID = GetServerID(); //客户端过来的请求，默认写上自己的serverid
-    pHeader->CmdID = CurHeader.CmdID;
-    pHeader->SN = CurHeader.SN;
-    pHeader->ConnPos = pConnInfoMap->second->GetConnPos();
-    pHeader->PkgTime = time(NULL);
-    pHeader->Ret = CurHeader.Ret;
-    pHeader->UserID = pConnInfoMap->second->GetUserID();
-    
-    XYHeaderIn CurHeaderIn(*pHeader);
-            
+    memcpy(m_pProcessBuff+CurHeaderIn.GetHeaderLen(), pCurBuffPos+CurHeader.GetHeadLen(), PkgInLen);
+
+    CurHeaderIn.SrcID = GetServerID(); //客户端过来的请求，默认写上自己的serverid
+    CurHeaderIn.CmdID = CurHeader.CmdID;
+    CurHeaderIn.SN = CurHeader.SN;
+    CurHeaderIn.ConnPos = pConnInfoMap->second->GetConnPos();
+    CurHeaderIn.PkgTime = time(NULL);
+    CurHeaderIn.Ret = CurHeader.Ret;
+    CurHeaderIn.UserID = pConnInfoMap->second->GetUserID();
+    CurHeaderIn.Write(m_pProcessBuff);
+        
     //校验CKSUM
     
     
@@ -1181,19 +1178,19 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
         pProcessBuff = m_pProcessBuff;
     }
 
-    if(pHeader->CmdID != Cmd_Login_Req && pConnInfoMap->second->GetConnType() != CONN_AUTH)
+    if(CurHeaderIn.CmdID != Cmd_Login_Req && pConnInfoMap->second->GetConnType() != CONN_AUTH)
     {
         return CurHeader.PkgLen;
     }
 
-    switch(pHeader->CmdID)
+    switch(CurHeaderIn.CmdID)
     {
         case Cmd_Login_Req:
         {
             app::LoginReq CurReq;
-            if(!CurReq.ParseFromArray(pProcessBuff+sizeof(XYHeaderIn), PkgInLen))
+            if(!CurReq.ParseFromArray(pProcessBuff+CurHeaderIn.GetHeaderLen(), PkgInLen))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", pHeader->CmdID);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", CurHeaderIn.CmdID);
                 return -1;
             }
 
@@ -1210,7 +1207,7 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
         }
         default:
         {
-            XF_LOG_WARN(0, 0, "unknow command %0x", pHeader->CmdID);
+            XF_LOG_WARN(0, 0, "unknow command %0x", CurHeaderIn.CmdID);
             break;
         }
     }
@@ -1221,8 +1218,8 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
 
 int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
 {
-    const XYHeaderIn* pHeader = (const XYHeaderIn*)pCurBuffPos;
-    XYHeaderIn Header(*pHeader);
+    XYHeaderIn Header;
+    Header.Read(pCurBuffPos);
     
     switch(Header.CmdID)
     {
@@ -1231,7 +1228,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             int ConnPos = Header.ConnPos;
             
             mm::LoginRsp CurRsp;
-            if(!CurRsp.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
+            if(!CurRsp.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
             {
                 XF_LOG_WARN(0, 0, "pkg parse failed, cmd=%0x", Cmd_Login_Rsp);
                 return -1;
@@ -1248,7 +1245,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 CurRsp2.set_ret(Result);
                 
                 XYHeader CurHeader;
-                CurHeader.PkgLen = PkgLen - sizeof(tagXYHeaderIn) + CurHeader.GetHeadLen();
+                CurHeader.PkgLen = PkgLen - Header.GetHeaderLen()+ CurHeader.GetHeadLen();
                 CurHeader.CmdID = Cmd_Login_Rsp;
                 CurHeader.SN = Header.SN;
                 CurHeader.CkSum = 0;
@@ -1262,7 +1259,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                     return -1;
                 }
 
-                Send2Client(ConnPos, m_pSendBuff, PkgLen-sizeof(XYHeaderIn)+CurHeader.GetHeadLen());
+                Send2Client(ConnPos, m_pSendBuff, PkgLen-Header.GetHeaderLen()+CurHeader.GetHeadLen());
             }
             else
             {
@@ -1281,7 +1278,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 CurHeader.PkgTime = time(NULL);
                 CurHeader.Ret = 0;
 
-                if(!CurReq.SerializeToArray(m_pSendBuff+sizeof(XYHeaderIn), XY_PKG_MAX_LEN-sizeof(XYHeaderIn)))
+                if(!CurReq.SerializeToArray(m_pSendBuff+CurHeader.GetHeaderLen(), XY_PKG_MAX_LEN-CurHeader.GetHeaderLen()))
                 {
                     XF_LOG_WARN(0, 0, "pack err msg failed");
                     return -1;
@@ -1295,7 +1292,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
         case Cmd_GNS_Register_Rsp:
         {
             mm::GNSRegisterRsp CurRsp;
-            if(!CurRsp.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
+            if(!CurRsp.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
             {
                 XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_GNS_Register_Rsp);
                 return -1;
@@ -1350,7 +1347,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
         case Cmd_Disconnect_Req:
         {
             mm::DisconnectReq CurReq;
-            if(!CurReq.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
+            if(!CurReq.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
             {
                 XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Disconnect_Req);
                 return -1;
@@ -1383,7 +1380,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             XYHeader CurHeader;
             CurHeader = Header.CoverToXYHeader(PkgLen);
             CurHeader.Write(m_pSendBuff);
-            memcpy(m_pSendBuff+CurHeader.GetHeadLen(), pCurBuffPos, PkgLen-sizeof(XYHeaderIn));
+            memcpy(m_pSendBuff+CurHeader.GetHeadLen(), pCurBuffPos, PkgLen-Header.GetHeaderLen());
 
             unsigned int CurConnPos = Header.ConnPos;
             if(CurConnPos == 0)
@@ -1395,7 +1392,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 }
             }
 
-            Send2Client(CurConnPos, m_pSendBuff, PkgLen-sizeof(XYHeaderIn)+CurHeader.GetHeadLen());
+            Send2Client(CurConnPos, m_pSendBuff, PkgLen-Header.GetHeaderLen()+CurHeader.GetHeadLen());
             
             break;
         }

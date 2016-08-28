@@ -361,14 +361,16 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
 {
     int Ret = 0;
     
-    const XYHeaderIn* pHeader = (const XYHeaderIn*)pCurBuffPos;
-
-    switch(pHeader->CmdID)
+    XYHeaderIn HeaderIn;
+    HeaderIn.Read(pCurBuffPos);
+    int HeaderInLen = HeaderIn.GetHeaderLen();
+    
+    switch(HeaderIn.CmdID)
     {
         case Cmd_GNS_Register_Req:
         {
             mm::GNSRegisterReq CurReq;
-            if(!CurReq.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
+            if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
                 XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_GNS_Register_Req);
                 return -1;
@@ -434,20 +436,20 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
             XYHeaderIn Header;
             Header.SrcID = GetServerID();
             Header.CmdID = Cmd_GNS_Register_Rsp;
-            Header.SN = pHeader->SN;
-            Header.ConnPos = pHeader->ConnPos;
-            Header.UserID = pHeader->UserID;
+            Header.SN = HeaderIn.SN;
+            Header.ConnPos = HeaderIn.ConnPos;
+            Header.UserID = HeaderIn.UserID;
             Header.PkgTime = time(NULL);
             Header.Ret = 0;
             
-            Send2Server(Header, pHeader->SrcID, TO_SRV, 0, CurRsp);
+            Send2Server(Header, HeaderIn.SrcID, TO_SRV, 0, CurRsp);
             
             break;
         }
         case Cmd_GNS_UnRegister_Req:
         {
             mm::GNSUnRegisterReq CurReq;
-            if(!CurReq.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
+            if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
                 XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_GNS_UnRegister_Req);
                 return -1;
@@ -492,7 +494,7 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
         case Cmd_Disconnect_Rsp:
         {
             mm::DisconnectRsp CurRsp;
-            if(!CurRsp.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
+            if(!CurRsp.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
                 XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Disconnect_Rsp);
                 return -1;
@@ -504,7 +506,7 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
         }
         default:
         {
-            XF_LOG_WARN(0, 0, "unknow cmdid %0x", pHeader->CmdID);
+            XF_LOG_WARN(0, 0, "unknow cmdid %0x", HeaderIn.CmdID);
             break;
         }
     }
@@ -513,10 +515,10 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
 }
 
 
-int CGns::Send2Server(const XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message)
+int CGns::Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message)
 {
     BusHeader CurBusHeader;
-    int HeaderLen = CurBusHeader.GetHeaderLen() + sizeof(XYHeaderIn);
+    int HeaderLen = CurBusHeader.GetHeaderLen() + Header.GetHeaderLen();
     CurBusHeader.PkgLen = HeaderLen + Message.ByteSize();
     CurBusHeader.CmdID = Cmd_Transfer;
     CurBusHeader.SrcID = GetServerID();
@@ -524,9 +526,8 @@ int CGns::Send2Server(const XYHeaderIn& Header, unsigned int DstID, char SendTyp
     CurBusHeader.SendType = SendType;
     CurBusHeader.Flag = Flag;
     CurBusHeader.Write(m_pSendBuff);
-
-    XYHeaderIn* pHeader = (XYHeaderIn*)(m_pSendBuff+CurBusHeader.GetHeaderLen());
-    pHeader->Copy(Header);
+    
+    Header.Write(m_pSendBuff+CurBusHeader.GetHeaderLen());
 
     if(!Message.SerializeToArray(m_pSendBuff+HeaderLen, XY_PKG_MAX_LEN-HeaderLen))
     {

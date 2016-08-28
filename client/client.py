@@ -12,6 +12,8 @@ XY_HEADER_LEN = 17
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM);
 s.connect((HOST, PORT));
 while(1):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM);
+    s.connect((HOST, PORT));
     CurReq = app_pb2.LoginReq();
     CurReq.userid = 100001
     CurReq.passwd = "12345"
@@ -30,5 +32,5 @@ while(1):
     print CurRsp.ret;
     if CurRsp.ret != 1:
         print 'login error'
-    time.sleep(3)
+    time.sleep(1)
 s.close();
