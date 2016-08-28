@@ -273,7 +273,7 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
             mm::LoginReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
             {
-                XF_LOG_WARN(0, 0, "login pkg parse failed, protocol buffer pkg len = %d", PkgLen-(int)sizeof(XYHeaderIn));
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Login_Req);
                 return -1;
             }
 

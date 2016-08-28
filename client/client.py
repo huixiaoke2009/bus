@@ -30,5 +30,5 @@ while(1):
     print CurRsp.ret;
     if CurRsp.ret != 1:
         print 'login error'
-    time.sleep(10000)
+    time.sleep(3)
 s.close();

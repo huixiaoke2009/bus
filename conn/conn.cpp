@@ -1193,7 +1193,7 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
             app::LoginReq CurReq;
             if(!CurReq.ParseFromArray(pProcessBuff+sizeof(XYHeaderIn), PkgInLen))
             {
-                XF_LOG_WARN(0, 0, "login pkg parse failed, protocol buffer pkg len = %d", PkgInLen);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", pHeader->CmdID);
                 return -1;
             }
 
@@ -1233,7 +1233,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             mm::LoginRsp CurRsp;
             if(!CurRsp.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
             {
-                XF_LOG_WARN(0, 0, "login pkg parse failed, protocol buffer pkg len = %d", PkgLen-(int)sizeof(XYHeaderIn));
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmd=%0x", Cmd_Login_Rsp);
                 return -1;
             }
 
@@ -1297,7 +1297,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             mm::GNSRegisterRsp CurRsp;
             if(!CurRsp.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
             {
-                XF_LOG_WARN(0, 0, "login pkg parse failed, protocol buffer pkg len = %d", PkgLen-(int)sizeof(XYHeaderIn));
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_GNS_Register_Rsp);
                 return -1;
             }
 
@@ -1352,7 +1352,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             mm::DisconnectReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
             {
-                XF_LOG_WARN(0, 0, "login pkg parse failed, protocol buffer pkg len = %d", PkgLen-(int)sizeof(XYHeaderIn));
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Disconnect_Req);
                 return -1;
             }
             
