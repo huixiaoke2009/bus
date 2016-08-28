@@ -323,7 +323,7 @@ int CAuth::Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, ch
     CurBusHeader.Flag = Flag;
     CurBusHeader.Write(m_pSendBuff);
 
-    Header.Write(m_pSendBuff);
+    Header.Write(m_pSendBuff+CurBusHeader.GetHeaderLen());
 
     if(!Message.SerializeToArray(m_pSendBuff+HeaderLen, XY_PKG_MAX_LEN-HeaderLen))
     {

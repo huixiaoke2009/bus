@@ -12,8 +12,6 @@ XY_HEADER_LEN = 17
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM);
 s.connect((HOST, PORT));
 while(1):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM);
-    s.connect((HOST, PORT));
     CurReq = app_pb2.LoginReq();
     CurReq.userid = 100001
     CurReq.passwd = "12345"
