@@ -391,7 +391,21 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
                 // TODO:通知其它连接层断开连接，不需要对方确认
                 if(tmp.Status == GNS_USER_STATUS_ACTIVE)
                 {
+                    mm::DisconnectReq CurReq2;
+                    CurReq2.set_userid(tmp.UserID);
+                    CurReq2.set_serverid(tmp.ServerID);
+                    CurReq2.set_connpos(tmp.ConnPos);
 
+                    XYHeaderIn Header;
+                    Header.SrcID = GetServerID();
+                    Header.CmdID = Cmd_Disconnect_Req;
+                    Header.SN = 0;
+                    Header.ConnPos = tmp.ConnPos;
+                    Header.UserID = tmp.UserID;
+                    Header.PkgTime = time(NULL);
+                    Header.Ret = 0;
+                    
+                    Send2Server(Header, tmp.ServerID, TO_SRV, 0, CurReq2);
                 }
 
                 Ret = m_UserInfoMap.Update(UserID, Info);
@@ -410,8 +424,6 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
                     return -1;
                 }
             }
-
-            
             
             mm::GNSRegisterRsp CurRsp;
             CurRsp.set_userid(UserID);
@@ -429,6 +441,19 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
             Header.Ret = 0;
             
             Send2Server(Header, pHeader->SrcID, TO_SRV, 0, CurRsp);
+            
+            break;
+        }
+        case Cmd_Disconnect_Rsp:
+        {
+            mm::DisconnectRsp CurRsp;
+            if(!CurRsp.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
+            {
+                XF_LOG_WARN(0, 0, "login pkg parse failed, protocol buffer pkg len = %d", PkgLen-(int)sizeof(XYHeaderIn));
+                return -1;
+            }
+
+            // 暂时不处理
             
             break;
         }

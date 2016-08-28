@@ -28,3 +28,18 @@ message GNSRegisterRsp
     required uint32 connpos = 3;
     required int32 ret = 4; // 1表示成功
 }
+
+message DisconnectReq
+{
+    required uint64 userid = 1;
+    required int32 serverid = 2;
+    required uint32 connpos = 3;
+}
+
+message DisconnectRsp
+{
+    required uint64 userid = 1;
+    required int32 serverid = 2;
+    required uint32 connpos = 3;
+    required int32 ret = 4; // 1表示成功
+}

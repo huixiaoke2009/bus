@@ -24,14 +24,14 @@ const unsigned int Cmd_Transfer = 0x00000003;
 const unsigned int Cmd_Login_Req = 0x00010001;
 const unsigned int Cmd_Login_Rsp = 0x00010002;
 
-
+// 断开连接
+const unsigned int Cmd_Disconnect_Req = 0x00010003;
+const unsigned int Cmd_Disconnect_Rsp = 0x00010004;
 
 
 /******************* GNS模块 *******************/
 const unsigned int Cmd_GNS_Register_Req = 0x00020001;
 const unsigned int Cmd_GNS_Register_Rsp = 0x00020002;
-
-const unsigned int Cmd_GNS_Disconnect_Req = 0x00020003;
 
 
 #endif

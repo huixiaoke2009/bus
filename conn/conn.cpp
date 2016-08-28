@@ -1330,6 +1330,30 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             
             break;
         }
+        case Cmd_Disconnect_Req:
+        {
+            mm::DisconnectReq CurReq;
+            uint64_t UserID = CurReq.userid();
+            int ServerID = CurReq.serverid();
+            unsigned int ConnPos = CurReq.connpos();
+
+            std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(ConnPos);
+            if(iter == m_PosConnMap.end())
+            {
+                return -1;
+            }
+
+            if(iter->second->GetUserID() != UserID || ServerID != GetServerID())
+            {
+                return -1;
+            }
+
+            ReleaseConn(iter);
+
+            // 暂时不回复
+            
+            break;
+        }
         default:
         {
             // 正常情况下透传给客户端就行了，其它server需要负责组好包
