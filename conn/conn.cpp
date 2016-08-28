@@ -772,6 +772,23 @@ void CConn::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInf
             m_UserIDConnMap.erase(pCurUserIDConn);
             XF_LOG_INFO(0, UserID, "DEL_USER_CONN_MAP|%llu", UserID);
         }
+
+        // 通知GNS断开
+        mm::GNSUnRegisterReq CurReq;
+        CurReq.set_userid(UserID);
+        CurReq.set_serverid(GetServerID());
+        CurReq.set_connpos(itrConnInfoMap->first);
+
+        XYHeaderIn Header;
+        Header.SrcID = GetServerID();
+        Header.CmdID = Cmd_GNS_UnRegister_Req;
+        Header.SN = 0;
+        Header.ConnPos = itrConnInfoMap->first;
+        Header.UserID = UserID;
+        Header.PkgTime = time(NULL);
+        Header.Ret = 0;
+        
+        Send2Server(Header, SERVER_GNS, TO_SRV, 0, CurReq);
     }
 
     m_PosConnMap.erase(itrConnInfoMap);
@@ -1333,6 +1350,12 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
         case Cmd_Disconnect_Req:
         {
             mm::DisconnectReq CurReq;
+            if(!CurReq.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
+            {
+                XF_LOG_WARN(0, 0, "login pkg parse failed, protocol buffer pkg len = %d", PkgLen-(int)sizeof(XYHeaderIn));
+                return -1;
+            }
+            
             uint64_t UserID = CurReq.userid();
             int ServerID = CurReq.serverid();
             unsigned int ConnPos = CurReq.connpos();

@@ -388,7 +388,7 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
             Ret = m_UserInfoMap.Get(UserID, tmp);
             if(Ret == 0)
             {
-                // TODO:通知其它连接层断开连接，不需要对方确认
+                // 通知其它连接层断开连接，不需要对方确认
                 if(tmp.Status == GNS_USER_STATUS_ACTIVE)
                 {
                     mm::DisconnectReq CurReq2;
@@ -442,6 +442,51 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
             
             Send2Server(Header, pHeader->SrcID, TO_SRV, 0, CurRsp);
             
+            break;
+        }
+        case Cmd_GNS_UnRegister_Req:
+        {
+            mm::GNSUnRegisterReq CurReq;
+            if(!CurReq.ParseFromArray(pCurBuffPos+sizeof(XYHeaderIn), PkgLen-sizeof(XYHeaderIn)))
+            {
+                XF_LOG_WARN(0, 0, "login pkg parse failed, protocol buffer pkg len = %d", PkgLen-(int)sizeof(XYHeaderIn));
+                return -1;
+            }
+
+            uint64_t UserID = CurReq.userid();
+            int ServerID = CurReq.serverid();
+            int ConnPos = CurReq.connpos();
+
+            ShmUserInfo Info;
+            Info.UserID = UserID;
+            Info.ServerID = ServerID;
+            Info.ConnPos = ConnPos;
+            Info.Status = GNS_USER_STATUS_UNACTIVE;
+
+            ShmUserInfo tmp;
+            Ret = m_UserInfoMap.Get(UserID, tmp);
+            if(Ret == 0)
+            {
+                if(tmp.Status != GNS_USER_STATUS_UNACTIVE)
+                {
+                    Ret = m_UserInfoMap.Update(UserID, Info);
+                    if(Ret != 0)
+                    {
+                        XF_LOG_WARN(0, 0, "m_UserInfoMap update failed, Ret=%d, UserID=%ld", Ret, UserID);
+                        return -1;
+                    }
+                }
+            }
+            else
+            {
+                Ret = m_UserInfoMap.Insert(UserID, Info);
+                if(Ret != 0)
+                {
+                    XF_LOG_WARN(0, 0, "m_UserInfoMap insert failed, Ret=%d, UserID=%ld", Ret, UserID);
+                    return -1;
+                }
+            }
+
             break;
         }
         case Cmd_Disconnect_Rsp:

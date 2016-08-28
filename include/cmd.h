@@ -30,8 +30,13 @@ const unsigned int Cmd_Disconnect_Rsp = 0x00010004;
 
 
 /******************* GNS模块 *******************/
+// 登记
 const unsigned int Cmd_GNS_Register_Req = 0x00020001;
 const unsigned int Cmd_GNS_Register_Rsp = 0x00020002;
+
+// 取消登记
+const unsigned int Cmd_GNS_UnRegister_Req = 0x00020003;
+const unsigned int Cmd_GNS_UnRegister_Rsp = 0x00020004;
 
 
 #endif
