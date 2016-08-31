@@ -19,12 +19,16 @@ class CAuth
         int Init(const char *pConfFile);
         int Run();
         int GetServerID(){return m_ServerID;}
+        
     private:
         int DealPkg(const char *pCurBuffPos, int PkgLen);
         int Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message);
         int LoginCheck(uint64_t UserID, const std::string& strPasswd);
+        int SendStateMessage();
+        
     private:
         unsigned int m_ServerID;
+        int m_StateTime;
         
         mmlib::CShmQueue m_SendQueue;
         mmlib::CShmQueue m_RecvQueue;

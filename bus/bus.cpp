@@ -74,7 +74,6 @@ CConnInfo::CConnInfo(unsigned int ConnPos, int SockID, const struct sockaddr_in 
     m_RemainSendData.clear();
     m_RemainRecvData.clear();
     m_LastActTime = time(NULL);
-    m_ClusterID = 0;
 }
 
 CConnInfo::~CConnInfo()
@@ -1247,7 +1246,7 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
         iter->second.Status = Status;
 
         XF_LOG_TRACE(0, 0, "Recieve State Change from ClusterID %d, ServerID %d, Status %d",
-                        pConnInfoMap->second->GetClusterID(), ServerID, Status);
+                        iter->second.ClusterID, ServerID, Status);
 
         return PkgLen;
     }

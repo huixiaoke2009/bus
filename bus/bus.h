@@ -59,12 +59,6 @@ class CConnInfo
         // 获取SockID
         int GetSockID() {return m_SockID;}
 
-        //设置服务器ID
-        void SetClusterID(unsigned int ClusterID){m_ClusterID = ClusterID;}
-
-        //获取服务器ID
-        unsigned int GetClusterID(){return m_ClusterID;}
-
         //获取连接编号
         unsigned int GetConnPos(){return m_ConnPos;}
 
@@ -85,8 +79,6 @@ class CConnInfo
         // 暂存数据的buff
         std::string m_RemainSendData;
         std::string m_RemainRecvData;
-
-        unsigned int m_ClusterID;
 };
 
 

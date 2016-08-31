@@ -138,10 +138,12 @@ class CConn
         int GetUserConnPos(uint64_t UserID, unsigned int &ConnPos);
         int GetConnType(unsigned int ConnPos, unsigned int& Type);
         int SetConnType(unsigned int ConnPos, unsigned int Type);
+        int SendStateMessage();
     private:
         // EPOLL句柄
         int m_EpollFD;
         int m_ServerID;
+        int m_StateTime;
         // 生成cpos的计数
         unsigned int m_ConnPosCnt;
 
