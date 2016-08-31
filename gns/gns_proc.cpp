@@ -15,6 +15,7 @@
 #include "util/util.h"
 #include "ini_file/ini_file.h"
 
+#include "bus.pb.h"
 #include "mm.pb.h"
 #include "bus_header.h"
 
@@ -62,6 +63,7 @@ static void SigHandler(int iSigNo)
 CGns::CGns()
 {
     m_ServerID = 0;
+    m_StateTime = 0;
     m_pSendBuff = NULL;
     m_MaxUserNodeNum = 0;
 }
@@ -115,6 +117,7 @@ int CGns::Init(const char *pConfFile)
         IniFile.GetInt("GNS", "UserShmKey", 0, &UserShmKey);
         IniFile.GetInt("GNS", "UserShmSize", 0, &UserShmSize);
         IniFile.GetInt("GNS", "NodeNum", 0, &m_MaxUserNodeNum);
+        IniFile.GetInt("GNS", "StateTime", 0, &m_StateTime);
         IniFile.GetString("LOG", "ModuleName", "app", ModuleName, sizeof(ModuleName));
         IniFile.GetInt("LOG", "LogLocal", 1, &LogLocal);
         IniFile.GetInt("LOG", "LogLevel", 3, &LogLevel);
@@ -311,8 +314,10 @@ int CGns::Run()
     
     char *pRecvBuff = (char *)malloc(XY_PKG_MAX_LEN);
     int RecvLen = XY_MAXBUFF_LEN;
+
+    time_t LastStateTime = time(NULL);
     
-    while(true)
+    while(!StopFlag)
     {
         int EmptyFlag = 1;  //没有数据标志位
         
@@ -345,6 +350,14 @@ int CGns::Run()
                 XF_LOG_WARN(0, 0, "Run|DealPkg failed, Ret=%d", Ret);
                 continue;
             }
+        }
+
+        // 向bus更新自己的状态
+        time_t NowTime = time(NULL);
+        if(NowTime - LastStateTime >= m_StateTime)
+        {
+            LastStateTime = NowTime;
+            SendStateMessage();
         }
 
         if(EmptyFlag)
@@ -554,4 +567,45 @@ int CGns::Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, cha
     return 0;
 }
 
+int CGns::SendStateMessage()
+{
+    BusHeader CurBusHeader;
+    int HeaderLen = CurBusHeader.GetHeaderLen();
+
+    bus::StateChangeMsg CurStateReq;
+    CurStateReq.set_serverid(GetServerID());
+    CurStateReq.set_status(BUS_SVR_ONLINE);
+
+    CurBusHeader.PkgLen = HeaderLen + CurStateReq.ByteSize();
+    CurBusHeader.CmdID = Cmd_StateChange;
+    CurBusHeader.SrcID = GetServerID();
+    CurBusHeader.DstID = 0;
+    CurBusHeader.SendType = TO_SRV;
+    CurBusHeader.Flag = 0;
+    CurBusHeader.Write(m_pSendBuff);
+
+    if(!CurStateReq.SerializeToArray(m_pSendBuff+HeaderLen, XY_PKG_MAX_LEN-HeaderLen))
+    {
+        XF_LOG_WARN(0, 0, "pack err msg failed");
+        return -1;
+    }
+
+    int Ret = m_SendQueue.InQueue(m_pSendBuff, CurBusHeader.PkgLen);
+    if(Ret == m_SendQueue.E_SHM_QUEUE_FULL)
+    {
+        XF_LOG_WARN(0, 0, "m_SendQueue InQueue failed, queue full");
+        return -1;
+    }
+    else if (Ret != 0)
+    {
+        XF_LOG_WARN(0, 0, "m_SendQueue InQueue failed, Ret=%d", Ret);
+        return -1;
+    }
+    else
+    {
+        XF_LOG_TRACE(0, 0, "m_SendQueue InQueue Success,[%s]", CStrTool::Str2Hex(m_pSendBuff, CurBusHeader.PkgLen));
+    }
+    
+    return 0;
+}
 

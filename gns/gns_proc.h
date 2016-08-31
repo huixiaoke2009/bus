@@ -19,12 +19,6 @@ typedef struct tagUserMemHead
     unsigned int CurUserSN;
 }UserMemHead;
 
-enum
-{
-    GNS_USER_STATUS_ACTIVE = 0,
-    GNS_USER_STATUS_UNACTIVE = 1,
-};
-
 
 typedef struct tagShmUserInfo
 {
@@ -48,12 +42,15 @@ class CGns
         int Init(const char *pConfFile);
         int Run();
         int GetServerID(){return m_ServerID;}
+        
     private:
         int DealPkg(const char *pCurBuffPos, int PkgLen);
         int Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message);
-
+        int SendStateMessage();
+        
     private:
         unsigned int m_ServerID;
+        int m_StateTime;
         
         mmlib::CShmQueue m_SendQueue;
         mmlib::CShmQueue m_RecvQueue;

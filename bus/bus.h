@@ -110,15 +110,6 @@ typedef struct tagClusterInfo
 }ClusterInfo;
 
 
-enum
-{
-    //服务器状态：在线，休眠，离开
-    BUS_SVR_ONLINE = 0,
-    BUS_SVR_SLEEP = 1,
-    BUS_SVR_OFFLINE = 2,
-};
-
-
 typedef struct tagServerInfo
 {
     unsigned int ClusterID;

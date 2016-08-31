@@ -11,12 +11,6 @@
 #ifndef _CONN_H_
 #define _CONN_H_
 
-enum CONNTYPE
-{
-    //连接类型：未认证，认证，webpcl
-    CONN_UNAUTH = 0,
-    CONN_AUTH = 1,
-};
 
 typedef struct tagConnMeta
 {

@@ -385,8 +385,8 @@ int CBus::Init(const char *pConfFile)
     if (IniFile.IsValid())
     {
         IniFile.GetInt("BUS", "ClusterID", 0, (int*)&m_ClusterID);
-        IniFile.GetInt("BUS", "UDPHelloTime", 0, (int*)&m_UDPHelloTime);
-        IniFile.GetInt("BUS", "TCPHelloTime", 0, (int*)&m_TCPHelloTime);
+        IniFile.GetInt("BUS", "UDPHelloTime", 0, &m_UDPHelloTime);
+        IniFile.GetInt("BUS", "TCPHelloTime", 0, &m_TCPHelloTime);
         
         IniFile.GetString("BUS", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
         

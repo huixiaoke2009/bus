@@ -217,7 +217,7 @@ int CAuth::Run()
     char *pRecvBuff = (char *)malloc(XY_PKG_MAX_LEN);
     int RecvLen = XY_MAXBUFF_LEN;
     
-    while(true)
+    while(!StopFlag)
     {
         int EmptyFlag = 1;  //没有数据标志位
         
