@@ -18,6 +18,9 @@ const unsigned int Cmd_Heartbeat = 0x00000002;
 // 转发数据包
 const unsigned int Cmd_Transfer = 0x00000003;
 
+// 服务器状态变更通知
+const unsigned int Cmd_StateChange = 0x00000004;
+
 
 /******************* 连接模块 *******************/
 // 登录协议

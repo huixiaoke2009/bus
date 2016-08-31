@@ -109,10 +109,21 @@ typedef struct tagClusterInfo
     
 }ClusterInfo;
 
+
+enum
+{
+    //服务器状态：在线，休眠，离开
+    BUS_SVR_ONLINE = 0,
+    BUS_SVR_SLEEP = 1,
+    BUS_SVR_OFFLINE = 2,
+};
+
+
 typedef struct tagServerInfo
 {
     unsigned int ClusterID;
     unsigned int GroupID;
+    int Status; // 服务器状态，预留字段，未启用
     int QueueKey;
     int QueueSize;
     mmlib::CShmQueue* pQueue;
@@ -121,6 +132,7 @@ typedef struct tagServerInfo
     {
         ClusterID = 0;
         GroupID = 0;
+        Status = 0;
         QueueKey = 0;
         QueueSize = 0;
         pQueue = NULL;

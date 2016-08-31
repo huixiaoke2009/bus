@@ -1123,6 +1123,24 @@ int CConn::Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, ch
     return 0;
 }
 
+int CConn::SendErrMsg2Server(unsigned int DstID, unsigned int CmdID, int ErrCode)
+{
+    mm::ErrorMsg CurReq;
+    CurReq.set_errcode(ErrCode);
+
+    XYHeaderIn Header;
+    Header.SrcID = GetServerID();
+    Header.CmdID = CmdID;
+    Header.SN = 0;
+    Header.ConnPos = 0;
+    Header.UserID = 0;
+    Header.PkgTime = time(NULL);
+    Header.Ret = ErrCode;
+
+    return Send2Server(Header, DstID, TO_SRV, 0, CurReq);
+}
+
+
 //返回值:0~PkgLen-1表示包不够大，-1表示出错要删除链接， PkgLen表示正常。如果要删除链接不要在这里删，返回-1即可
 int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap)
 {

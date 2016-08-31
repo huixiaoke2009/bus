@@ -3,11 +3,18 @@ package bus;
 
 message HeartbeatMsg
 {
-    required uint32 ClusterID = 1;
+    required uint32 clusterid = 1;
 }
 
 
 message HelloMessage
 {
-    required uint32 ClusterID = 1;
-} 
+    required uint32 clusterid = 1;
+}
+
+
+message StateChangeMsg
+{
+    required int32 serverid = 1;
+    required int32 status = 2;
+}

@@ -628,6 +628,7 @@ int CBus::Init(const char *pConfFile)
 
                 Info.GroupID = tmpGroupID;
                 Info.QueueKey = QueueKey;
+                Info.Status = BUS_SVR_ONLINE;
                 Info.QueueSize = QueueSize;
                 Info.pQueue = pQueue;
                 
@@ -900,6 +901,7 @@ int CBus::Run()
                 if(Ret != 0)
                 {
                     XF_LOG_WARN(0, 0, "ForwardMsg failed, Ret = %d", Ret);
+                    continue;
                 }
             }
         }
@@ -1221,7 +1223,35 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
 
         return PkgLen;
     }
-    
+
+    if(CurHeader.CmdID == Cmd_StateChange)
+    {
+        bus::StateChangeMsg CurStateReq;
+        if (!CurStateReq.ParseFromArray(m_pProcessBuff+HeaderLen, PkgLen-HeaderLen))
+        {
+            //相当于不要这个包了
+            XF_LOG_WARN(0, 0, "Parse Pkg failed, CmdID=%0x", CurHeader.CmdID);
+            return PkgLen;
+        }
+
+        int ServerID = CurStateReq.serverid();
+        int Status = CurStateReq.status();
+
+        map<unsigned int, ServerInfo>::iterator iter = m_mapSvrInfo.find(ServerID);
+        if(iter == m_mapSvrInfo.end())
+        {
+            XF_LOG_WARN(0, 0, "Unknow ServerID %d, %d", ServerID, Status);
+            return PkgLen;
+        }
+
+        iter->second.Status = Status;
+
+        XF_LOG_TRACE(0, 0, "Recieve State Change from ClusterID %d, ServerID %d, Status %d",
+                        pConnInfoMap->second->GetClusterID(), ServerID, Status);
+
+        return PkgLen;
+    }
+
     // ------------------------- bus内部协议 end ---------------------
     
     unsigned int DstID = CurHeader.DstID;
@@ -1280,21 +1310,18 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
     {
         // 这里需要进行转发吗?
         /*
-        for(int i = 0; i < m_ClusterNum && i < XY_MAX_CLUSTER_NUM; i++)
+        map<unsigned int, ClusterInfo>::iterator iter2 = m_mapClusterInfo.find(Info.ClusterID);
+        if(iter2 != m_mapClusterInfo.end())
         {
-            if(m_ClusterInfo[i].ClusterID == Info.ClusterID)
+            Ret = Send2Cluster(iter2->second, m_pProcessBuff, PkgLen);
+            if(Ret != 0)
             {
-                Ret = Send2Cluster(m_ClusterInfo[i], m_pProcessBuff, RecvLen);
-                if(Ret != 0)
-                {
-                    XF_LOG_WARN(0, 0, "Send2Cluster failed, %d", Info.ClusterID);
-                    return -1;
-                }
-                
-                break;
+                XF_LOG_WARN(0, 0, "Send2Cluster failed, %d", Info.ClusterID);
+                return PkgLen;
             }
         }
         */
+
         XF_LOG_WARN(0, 0, "unbelievable, DstID=%d, SrcID=%d, CmdID=%0x", DstID, SrcID, CmdID);
     }
     
@@ -1340,6 +1367,56 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
     char Flag = CurHeader.Flag;
     
     XF_LOG_DEBUG(0, 0, "%d|%d|%d|%d|%0x", SrcID, DstID, SendType, Flag, CmdID);
+
+    if(CurHeader.CmdID == Cmd_StateChange)
+    {
+        if(SendType == TO_GRP)
+        {
+            XF_LOG_WARN(0, 0, "SendType:%d error", SendType);
+            return -1;
+        }
+
+        bus::StateChangeMsg CurStateReq;
+        if (!CurStateReq.ParseFromArray(pCurBuffPos+HeaderLen, PkgLen-HeaderLen))
+        {
+            //相当于不要这个包了
+            XF_LOG_WARN(0, 0, "Parse Pkg failed, CmdID=%0x", Cmd_StateChange);
+            return -1;
+        }
+
+        int ServerID = CurStateReq.serverid();
+        int Status = CurStateReq.status();
+
+        map<unsigned int, ServerInfo>::iterator iter = m_mapSvrInfo.find(ServerID);
+        if(iter == m_mapSvrInfo.end())
+        {
+            XF_LOG_WARN(0, 0, "Unknow ServerID %d, %d", ServerID, Status);
+            return -1;
+        }
+
+        iter->second.Status = Status;
+
+        XF_LOG_TRACE(0, 0, "Recieve State Change from ServerID %d, Status %d", ServerID, Status);
+
+        // 是否转发给其它的Cluster
+        map<unsigned int, ClusterInfo>::iterator iter2 = m_mapClusterInfo.begin();
+        for(; iter2 != m_mapClusterInfo.end(); iter2++)
+        {
+            if(iter2->second.ClusterID == GetClusterID())
+            {
+                continue;
+            }
+            
+            Ret = Send2Cluster(iter2->second, pCurBuffPos, PkgLen);
+            if(Ret != 0)
+            {
+                XF_LOG_WARN(0, 0, "Send2Cluster failed, %d", iter2->second.ClusterID);
+                return -1;
+            }
+        }
+
+        return 0;
+    }
 
     if(SendType == TO_GRP)
     {
