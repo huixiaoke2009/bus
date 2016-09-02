@@ -4,6 +4,7 @@ BUS = bus
 AUTH = auth
 LOGSVR = logsvr
 GNS = gns
+USER = user
 
 MAKE = make
 CLEAN = clean
@@ -18,6 +19,7 @@ all:
 	cd $(LOGSVR) && $(MAKE)
 	cd $(CONN) && $(MAKE)
 	cd $(GNS) && $(MAKE)
+	cd $(USER) && $(MAKE)
 clean:
 	cd $(MMLIB) && $(MAKE) $(CLEAN)
 	cd $(INCLUDE) && $(MAKE) $(CLEAN)
@@ -26,3 +28,4 @@ clean:
 	cd $(LOGSVR) && $(MAKE) $(CLEAN)
 	cd $(CONN) && $(MAKE) $(CLEAN)
 	cd $(GNS) && $(MAKE) $(CLEAN)
+	cd $(USER) && $(MAKE) $(CLEAN)

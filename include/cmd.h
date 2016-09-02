@@ -22,7 +22,7 @@ const unsigned int Cmd_Transfer = 0x00000003;
 const unsigned int Cmd_StateChange = 0x00000004;
 
 
-/******************* 连接模块 *******************/
+/******************* CONN模块 *******************/
 // 登录协议
 const unsigned int Cmd_Login_Req = 0x00010001;
 const unsigned int Cmd_Login_Rsp = 0x00010002;
@@ -32,14 +32,20 @@ const unsigned int Cmd_Disconnect_Req = 0x00010003;
 const unsigned int Cmd_Disconnect_Rsp = 0x00010004;
 
 
+/******************* AUTH模块 *******************/
+
+
 /******************* GNS模块 *******************/
 // 登记
-const unsigned int Cmd_GNS_Register_Req = 0x00020001;
-const unsigned int Cmd_GNS_Register_Rsp = 0x00020002;
+const unsigned int Cmd_GNS_Register_Req = 0x00030001;
+const unsigned int Cmd_GNS_Register_Rsp = 0x00030002;
 
 // 取消登记
-const unsigned int Cmd_GNS_UnRegister_Req = 0x00020003;
-const unsigned int Cmd_GNS_UnRegister_Rsp = 0x00020004;
+const unsigned int Cmd_GNS_UnRegister_Req = 0x00030003;
+const unsigned int Cmd_GNS_UnRegister_Rsp = 0x00030004;
 
+/******************* USER模块 *******************/
+const unsigned int Cmd_User_AddFriend_Req = 0x00040001;
+const unsigned int Cmd_User_AddFriend_Rsp = 0x00040002;
 
 #endif

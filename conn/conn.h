@@ -129,7 +129,7 @@ class CConn
     private:
         int AcceptConn(int ConnPos, int type);
         void CheckConn();
-        void ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
+        void ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap, bool bSend2Gns = true);
         int Send2Client(int CurConnPos,const char *pSendBuff, int SendBuffLen);
         int Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message);
         int SendErrMsg2Server(unsigned int DstID, unsigned int CmdID, int ErrCode);

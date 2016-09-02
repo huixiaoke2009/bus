@@ -754,7 +754,7 @@ void CConn::CheckConn()
     return;
 }
 
-void CConn::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInfoMap)
+void CConn::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInfoMap, bool bSend2Gns)
 {
     CConnInfo *pCurConnInfo = itrConnInfoMap->second;
     epoll_ctl(m_EpollFD, EPOLL_CTL_DEL, pCurConnInfo->GetSockID(), NULL);
@@ -774,23 +774,26 @@ void CConn::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInf
             m_UserIDConnMap.erase(pCurUserIDConn);
             XF_LOG_INFO(0, UserID, "DEL_USER_CONN_MAP|%llu", UserID);
         }
-
-        // 通知GNS断开
-        mm::GNSUnRegisterReq CurReq;
-        CurReq.set_userid(UserID);
-        CurReq.set_serverid(GetServerID());
-        CurReq.set_connpos(itrConnInfoMap->first);
-
-        XYHeaderIn Header;
-        Header.SrcID = GetServerID();
-        Header.CmdID = Cmd_GNS_UnRegister_Req;
-        Header.SN = 0;
-        Header.ConnPos = itrConnInfoMap->first;
-        Header.UserID = UserID;
-        Header.PkgTime = time(NULL);
-        Header.Ret = 0;
         
-        Send2Server(Header, SERVER_GNS, TO_SRV, 0, CurReq);
+        if(bSend2Gns)
+        {
+            // 通知GNS断开
+            mm::GNSUnRegisterReq CurReq;
+            CurReq.set_userid(UserID);
+            CurReq.set_serverid(GetServerID());
+            CurReq.set_connpos(itrConnInfoMap->first);
+
+            XYHeaderIn Header;
+            Header.SrcID = GetServerID();
+            Header.CmdID = Cmd_GNS_UnRegister_Req;
+            Header.SN = 0;
+            Header.ConnPos = itrConnInfoMap->first;
+            Header.UserID = UserID;
+            Header.PkgTime = time(NULL);
+            Header.Ret = 0;
+            
+            Send2Server(Header, SERVER_GNS, TO_SRV, 0, CurReq);
+        }
     }
 
     m_PosConnMap.erase(itrConnInfoMap);
@@ -798,6 +801,7 @@ void CConn::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInf
 
     SAFE_DELETE(pCurConnInfo);
 }
+
 
 int CConn::Run()
 {
@@ -1213,26 +1217,42 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
         return CurHeader.PkgLen;
     }
 
-    switch(CurHeaderIn.CmdID)
+    unsigned int CmdPrefix = CurHeaderIn.CmdID>>16;
+    switch(CmdPrefix)
     {
-        case Cmd_Login_Req:
+        case CMD_PREFIX_CONN:
         {
-            app::LoginReq CurReq;
-            if(!CurReq.ParseFromArray(pProcessBuff+CurHeaderIn.GetHeaderLen(), PkgInLen))
+            if(CurHeaderIn.CmdID == Cmd_Login_Req)
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", CurHeaderIn.CmdID);
-                return -1;
+                app::LoginReq CurReq;
+                if(!CurReq.ParseFromArray(pProcessBuff+CurHeaderIn.GetHeaderLen(), PkgInLen))
+                {
+                    XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", CurHeaderIn.CmdID);
+                    return -1;
+                }
+
+                uint64_t UserID = CurReq.userid();
+                string strPasswd = CurReq.passwd();
+                
+                mm::LoginReq CurReq2;
+                CurReq2.set_userid(UserID);
+                CurReq2.set_passwd(strPasswd);
+
+                Send2Server(CurHeaderIn, GROUP_AUTH, TO_GRP, 0, CurReq2);
             }
 
-            uint64_t UserID = CurReq.userid();
-            string strPasswd = CurReq.passwd();
-            
-            mm::LoginReq CurReq2;
-            CurReq2.set_userid(UserID);
-            CurReq2.set_passwd(strPasswd);
-
-            Send2Server(CurHeaderIn, GROUP_AUTH, TO_GRP, 0, CurReq2);
-
+            break;
+        }
+        case CMD_PREFIX_AUTH:
+        {
+            break;
+        }
+        case CMD_PREFIX_GNS:
+        {
+            break;
+        }
+        case CMD_PREFIX_USER:
+        {
             break;
         }
         default:
@@ -1398,7 +1418,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 return -1;
             }
 
-            ReleaseConn(iter);
+            ReleaseConn(iter, false);
 
             // 暂时不回复
             

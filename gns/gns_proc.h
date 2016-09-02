@@ -11,27 +11,27 @@
 #include "common.h"
 #include "header.h"
 
-const char USER_MEM_MAGIC[] = "THIS IS USER MEM AAAAAAAAAAA";
-const short USER_MEM_HEAD_SIZE = 256;
-typedef struct tagUserMemHead
+const char GNS_MEM_MAGIC[] = "THIS IS GNS MEM AAAAAAAAAAA";
+const short GNS_MEM_HEAD_SIZE = 256;
+typedef struct tagGnsMemHead
 {
     char Magic[32];
     unsigned int CurUserSN;
-}UserMemHead;
+}GnsMemHead;
 
 
-typedef struct tagShmUserInfo
+typedef struct tagShmGnsInfo
 {
     uint64_t UserID;
     int ServerID;
     unsigned int ConnPos;
     int Status;
 
-    tagShmUserInfo()
+    tagShmGnsInfo()
     {
-        memset(this, 0x0, sizeof(tagShmUserInfo));
+        memset(this, 0x0, sizeof(tagShmGnsInfo));
     }
-}ShmUserInfo;
+}ShmGnsInfo;
 
 class CGns
 {
@@ -57,10 +57,10 @@ class CGns
 
         char* m_pSendBuff;
 
-        int m_MaxUserNodeNum;
-        mmlib::CShareMem m_UserMem;
-        UserMemHead* m_pUserHead;
-        mmlib::CHashListNoLock<uint64_t, ShmUserInfo> m_UserInfoMap;
+        int m_MaxGnsNodeNum;
+        mmlib::CShareMem m_GnsMem;
+        GnsMemHead* m_pGnsHead;
+        mmlib::CHashListNoLock<uint64_t, ShmGnsInfo> m_GnsInfoMap;
 };
 
 

@@ -65,7 +65,7 @@ CGns::CGns()
     m_ServerID = 0;
     m_StateTime = 0;
     m_pSendBuff = NULL;
-    m_MaxUserNodeNum = 0;
+    m_MaxGnsNodeNum = 0;
 }
 
 CGns::~CGns()
@@ -106,19 +106,19 @@ int CGns::Init(const char *pConfFile)
     int LogLevel = 0;
     char LogPath[1024] = {0};
 
-    int UserShmKey = 0;
-    int UserShmSize = 0;
+    int GnsShmKey = 0;
+    int GnsShmSize = 0;
     char BusConfPath[256] = {0};
 
     if (IniFile.IsValid())
     {
         IniFile.GetInt("GNS", "ServerID", 0, (int*)&m_ServerID);
         IniFile.GetString("GNS", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
-        IniFile.GetInt("GNS", "UserShmKey", 0, &UserShmKey);
-        IniFile.GetInt("GNS", "UserShmSize", 0, &UserShmSize);
-        IniFile.GetInt("GNS", "NodeNum", 0, &m_MaxUserNodeNum);
+        IniFile.GetInt("GNS", "GnsShmKey", 0, &GnsShmKey);
+        IniFile.GetInt("GNS", "GnsShmSize", 0, &GnsShmSize);
+        IniFile.GetInt("GNS", "NodeNum", 0, &m_MaxGnsNodeNum);
         IniFile.GetInt("GNS", "StateTime", 0, &m_StateTime);
-        IniFile.GetString("LOG", "ModuleName", "app", ModuleName, sizeof(ModuleName));
+        IniFile.GetString("LOG", "ModuleName", "gns", ModuleName, sizeof(ModuleName));
         IniFile.GetInt("LOG", "LogLocal", 1, &LogLocal);
         IniFile.GetInt("LOG", "LogLevel", 3, &LogLevel);
         IniFile.GetString("LOG", "LogPath", "/dev/null", LogPath, sizeof(LogPath));
@@ -172,12 +172,6 @@ int CGns::Init(const char *pConfFile)
     BusFile.GetInt(strServer.c_str(), "QueueKey", 0, &RecvShmKey);
     BusFile.GetInt(strServer.c_str(), "QueueSize", 0, &RecvShmSize);
 
-    if (0 == SendShmKey || 0 == SendShmSize)
-    {
-        printf("Error 0 == SendShmKey(%x) || 0 == SendShmSize(%d)", SendShmKey, SendShmSize);
-        return -1;
-    }
-    
     if (0 == RecvShmKey || 0 == RecvShmSize)
     {
         printf("Error 0 == RecvShmKey(%x) || 0 == RecvShmSize(%d)", RecvShmKey, RecvShmSize);
@@ -194,6 +188,11 @@ int CGns::Init(const char *pConfFile)
     
     printf("init m_RecvQueue succ, key=0x%x, size=%u\n", RecvShmKey, RecvShmSize);
 
+    if (0 == SendShmKey || 0 == SendShmSize)
+    {
+        printf("Error 0 == SendShmKey(%x) || 0 == SendShmSize(%d)", SendShmKey, SendShmSize);
+        return -1;
+    }
     
     Ret = m_SendQueue.Init(SendShmKey, SendShmSize);
     if (Ret != 0)
@@ -205,104 +204,103 @@ int CGns::Init(const char *pConfFile)
     
     printf("init m_SendQueue succ, key=0x%x, size=%u\n", SendShmKey, SendShmSize);
 
-    
-
-    printf("svr init success\n");
 
     if(!m_pSendBuff)
     {
         m_pSendBuff = (char*)malloc(XY_PKG_MAX_LEN);
     }
     
-    if (UserShmKey == 0)
+    if (GnsShmKey == 0)
     {
-        printf("ERR:conf GNS/UserShmKey is not valid\n");
+        printf("ERR:conf GNS/GnsShmKey is not valid\n");
         return -1;
     }
 
-    if (UserShmSize == 0)
+    if (GnsShmSize == 0)
     {
-        printf("ERR:conf GNS/UserShmSize is not valid\n");
+        printf("ERR:conf GNS/GnsShmSize is not valid\n");
         return -1;
     }
     
-    if (m_MaxUserNodeNum == 0)
+    if (m_MaxGnsNodeNum == 0)
     {
         printf("ERR:conf GNS/NodeNum is not valid\n");
         return -1;
     }
 
-    int UserMemHeadSize = USER_MEM_HEAD_SIZE;
-    int UserInfoMemSize = m_UserInfoMap.CalcSize(m_MaxUserNodeNum, m_MaxUserNodeNum);
+    int GnsMemHeadSize = GNS_MEM_HEAD_SIZE;
+    int GnsInfoMemSize = m_GnsInfoMap.CalcSize(m_MaxGnsNodeNum, m_MaxGnsNodeNum);
 
-    int UserMemNeed =  UserInfoMemSize + UserMemHeadSize;
-    if (UserMemNeed > UserShmSize)
+    int GnsMemNeed =  GnsInfoMemSize + GnsMemHeadSize;
+    if (GnsMemNeed > GnsShmSize)
     {
-        printf("ERR:conf USER/UserShmSize[%d] is not enough, need %d\n", UserShmSize, UserMemNeed);
+        printf("ERR:conf GNS/GnsShmSize[%d] is not enough, need %d\n", GnsShmSize, GnsMemNeed);
         return -1;
     }
 
-    printf("UserMemNeed=%d, UserShmSize=%d\n", UserMemNeed, UserShmSize);
+    printf("GnsMemNeed=%d, GnsShmSize=%d\n", GnsMemNeed, GnsShmSize);
 
-    Ret = m_UserMem.Create(UserShmKey, UserShmSize, 0666);
-    if ((Ret != m_UserMem.SUCCESS)&&(Ret != m_UserMem.SHM_EXIST))
+    Ret = m_GnsMem.Create(GnsShmKey, GnsShmSize, 0666);
+    if ((Ret != m_GnsMem.SUCCESS)&&(Ret != m_GnsMem.SHM_EXIST))
     {
-        printf("ERR:create user shm failed, key=%d, size=%d, ret=%d\n", UserShmKey, UserShmSize, Ret);
+        printf("ERR:create gns shm failed, key=%d, size=%d, ret=%d\n", GnsShmKey, GnsShmSize, Ret);
         return -1;
     }
 
-    Ret = m_UserMem.Attach();
-    if (Ret != m_UserMem.SUCCESS)
+    Ret = m_GnsMem.Attach();
+    if (Ret != m_GnsMem.SUCCESS)
     {
-        printf("ERR:attach user shm failed, key=%d, size=%d, ret=%d\n", UserShmKey, UserShmSize, Ret);
+        printf("ERR:attach gns shm failed, key=%d, size=%d, ret=%d\n", GnsShmKey, GnsShmSize, Ret);
         return -1;
     }
 
-    printf("INFO:user shm create succ\n");
+    printf("INFO:gns shm create succ\n");
 
-    m_pUserHead = (UserMemHead *)m_UserMem.GetMem();
-    void *pUserInfoMem = ((char *)m_UserMem.GetMem()) + UserMemHeadSize;
+    m_pGnsHead = (tagGnsMemHead *)m_GnsMem.GetMem();
+    void *pGnsInfoMem = ((char *)m_GnsMem.GetMem()) + GnsMemHeadSize;
 
-    if (m_pUserHead == NULL)
+    if (m_pGnsHead == NULL)
     {
         printf("ERR:create shm failed\n");
         return -1;
     }
 
     bool ClearFlag = false;
-    if (memcmp(m_pUserHead->Magic, USER_MEM_MAGIC, sizeof(m_pUserHead->Magic)) != 0)
+    if (memcmp(m_pGnsHead->Magic, GNS_MEM_MAGIC, sizeof(m_pGnsHead->Magic)) != 0)
     {
         ClearFlag = true;
-        memset(m_pUserHead, 0, USER_MEM_HEAD_SIZE);
-        memcpy(m_pUserHead->Magic, USER_MEM_MAGIC, sizeof(m_pUserHead->Magic));
-        printf("WARN:user map shoud clear\n");
+        memset(m_pGnsHead, 0, GNS_MEM_HEAD_SIZE);
+        memcpy(m_pGnsHead->Magic, GNS_MEM_MAGIC, sizeof(m_pGnsHead->Magic));
+        printf("WARN:gns map shoud clear\n");
     }
 
-    Ret = m_UserInfoMap.Init(pUserInfoMem, UserInfoMemSize, m_MaxUserNodeNum, m_MaxUserNodeNum);
+    Ret = m_GnsInfoMap.Init(pGnsInfoMem, GnsInfoMemSize, m_MaxGnsNodeNum, m_MaxGnsNodeNum);
     if (Ret != 0)
     {
-        printf("ERR:init user info shm failed, ret=%d\n", Ret);
+        printf("ERR:init gns info shm failed, ret=%d\n", Ret);
         return -1;
     }
 
-    printf("INFO:user info map init succ\n");
+    printf("INFO:gns info map init succ\n");
 
     if (ClearFlag)
     {
-        m_UserInfoMap.Clear();
+        m_GnsInfoMap.Clear();
         ClearFlag = false;
     }
 
-    Ret = m_UserInfoMap.Verify();
+    Ret = m_GnsInfoMap.Verify();
     if (Ret != 0)
     {
-        printf("WARN:user info verify failed, Ret = %d\n", Ret);
+        printf("WARN:gns info verify failed, Ret = %d\n", Ret);
         return -1;
     }
     else
     {
-        printf("INFO:user info map verify succ\n");
+        printf("INFO:gns info map verify succ\n");
     }
+
+    printf("svr init success\n");
 
     return 0;
 }
@@ -393,14 +391,14 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
             int ServerID = CurReq.serverid();
             int ConnPos = CurReq.connpos();
 
-            ShmUserInfo Info;
+            ShmGnsInfo Info;
             Info.UserID = UserID;
             Info.ServerID = ServerID;
             Info.ConnPos = ConnPos;
             Info.Status = GNS_USER_STATUS_ACTIVE;
 
-            ShmUserInfo tmp;
-            Ret = m_UserInfoMap.Get(UserID, tmp);
+            ShmGnsInfo tmp;
+            Ret = m_GnsInfoMap.Get(UserID, tmp);
             if(Ret == 0)
             {
                 // 通知其它连接层断开连接，不需要对方确认
@@ -423,19 +421,19 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
                     Send2Server(Header, tmp.ServerID, TO_SRV, 0, CurReq2);
                 }
 
-                Ret = m_UserInfoMap.Update(UserID, Info);
+                Ret = m_GnsInfoMap.Update(UserID, Info);
                 if(Ret != 0)
                 {
-                    XF_LOG_WARN(0, 0, "m_UserInfoMap update failed, Ret=%d, UserID=%ld", Ret, UserID);
+                    XF_LOG_WARN(0, 0, "m_GnsInfoMap update failed, Ret=%d, UserID=%ld", Ret, UserID);
                     return -1;
                 }
             }
             else
             {
-                Ret = m_UserInfoMap.Insert(UserID, Info);
+                Ret = m_GnsInfoMap.Insert(UserID, Info);
                 if(Ret != 0)
                 {
-                    XF_LOG_WARN(0, 0, "m_UserInfoMap insert failed, Ret=%d, UserID=%ld", Ret, UserID);
+                    XF_LOG_WARN(0, 0, "m_GnsInfoMap insert failed, Ret=%d, UserID=%ld", Ret, UserID);
                     return -1;
                 }
             }
@@ -472,32 +470,32 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
             int ServerID = CurReq.serverid();
             int ConnPos = CurReq.connpos();
 
-            ShmUserInfo Info;
+            ShmGnsInfo Info;
             Info.UserID = UserID;
             Info.ServerID = ServerID;
             Info.ConnPos = ConnPos;
             Info.Status = GNS_USER_STATUS_UNACTIVE;
 
-            ShmUserInfo tmp;
-            Ret = m_UserInfoMap.Get(UserID, tmp);
+            ShmGnsInfo tmp;
+            Ret = m_GnsInfoMap.Get(UserID, tmp);
             if(Ret == 0)
             {
                 if(tmp.Status != GNS_USER_STATUS_UNACTIVE)
                 {
-                    Ret = m_UserInfoMap.Update(UserID, Info);
+                    Ret = m_GnsInfoMap.Update(UserID, Info);
                     if(Ret != 0)
                     {
-                        XF_LOG_WARN(0, 0, "m_UserInfoMap update failed, Ret=%d, UserID=%ld", Ret, UserID);
+                        XF_LOG_WARN(0, 0, "m_GnsInfoMap update failed, Ret=%d, UserID=%ld", Ret, UserID);
                         return -1;
                     }
                 }
             }
             else
             {
-                Ret = m_UserInfoMap.Insert(UserID, Info);
+                Ret = m_GnsInfoMap.Insert(UserID, Info);
                 if(Ret != 0)
                 {
-                    XF_LOG_WARN(0, 0, "m_UserInfoMap insert failed, Ret=%d, UserID=%ld", Ret, UserID);
+                    XF_LOG_WARN(0, 0, "m_GnsInfoMap insert failed, Ret=%d, UserID=%ld", Ret, UserID);
                     return -1;
                 }
             }

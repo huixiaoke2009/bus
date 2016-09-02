@@ -113,7 +113,7 @@ int CAuth::Init(const char *pConfFile)
         IniFile.GetString("AUTH", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
         IniFile.GetInt("AUTH", "StateTime", 0, &m_StateTime);
         
-        IniFile.GetString("LOG", "ModuleName", "app", ModuleName, sizeof(ModuleName));
+        IniFile.GetString("LOG", "ModuleName", "auth", ModuleName, sizeof(ModuleName));
         IniFile.GetInt("LOG", "LogLocal", 1, &LogLocal);
         IniFile.GetInt("LOG", "LogLevel", 3, &LogLevel);
         IniFile.GetString("LOG", "LogPath", "/dev/null", LogPath, sizeof(LogPath));
