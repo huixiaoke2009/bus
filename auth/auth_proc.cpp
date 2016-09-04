@@ -463,7 +463,7 @@ int CAuth::Register(const std::string& strPasswd, uint64_t& UserID)
     UserID = time(NULL);  // 这里还没想好方案，先这样子吧
     
     char SqlStr[1024] = {0};
-    int SqlLen = snprintf(SqlStr, sizeof(SqlStr), "insert into %s.%s values (%lu, '%s')", m_DBName, m_TableName, UserID, strPasswd.c_str());
+    int SqlLen = snprintf(SqlStr, sizeof(SqlStr), "insert into %s.%s (userid, passwd) values (%lu, '%s')", m_DBName, m_TableName, UserID, strPasswd.c_str());
     int Ret = m_DBConn.Query(SqlStr, SqlLen);
     if (Ret != 0)
     {

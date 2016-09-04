@@ -1480,7 +1480,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             XYHeader CurHeader;
             CurHeader = Header.CoverToXYHeader(PkgLen);
             CurHeader.Write(m_pSendBuff);
-            memcpy(m_pSendBuff+CurHeader.GetHeadLen(), pCurBuffPos, PkgLen-Header.GetHeaderLen());
+            memcpy(m_pSendBuff+CurHeader.GetHeadLen(), pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen());
 
             unsigned int CurConnPos = Header.ConnPos;
             if(CurConnPos == 0)
