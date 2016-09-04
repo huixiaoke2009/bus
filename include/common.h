@@ -14,7 +14,7 @@ const int MAX_FRIEND_NUM = 200;
 
 // auth常量
 const int DATABASE_NUM = 4;
-
+const int TABLE_NUM = 2;
 
 // 服务器与组
 const int GROUP_CONN = 100;

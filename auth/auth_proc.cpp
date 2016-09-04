@@ -437,15 +437,16 @@ int CAuth::Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, ch
 /* 0 系统错误  1 验证通过  2 密码错误或用户不存在 */
 int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd)
 {
-    int Index = UserID%DATABASE_NUM;
+    int DBIndex = UserID%DATABASE_NUM;
+    int TableIndex = (UserID>>1)%TABLE_NUM;
     
     char SqlStr[1024] = {0};
     int RecNum = 0;
-    int SqlLen = snprintf(SqlStr, sizeof(SqlStr), "select passwd from %s.%s where userid=%lu", m_DBConfig[Index].DBName, m_DBConfig[Index].TableName, UserID);
-    int Ret = m_DBConn[Index].Query(SqlStr, SqlLen, &RecNum);
+    int SqlLen = snprintf(SqlStr, sizeof(SqlStr), "select passwd from %s.%s_%d where userid=%lu", m_DBConfig[DBIndex].DBName, m_DBConfig[DBIndex].TableName, TableIndex, UserID);
+    int Ret = m_DBConn[DBIndex].Query(SqlStr, SqlLen, &RecNum);
     if (Ret != 0)
     {
-        XF_LOG_WARN(0, UserID,  "query db ret failed, ret=%d, errmsg=%s, sql=%s", Ret, m_DBConn[Index].GetErrMsg(), SqlStr);
+        XF_LOG_WARN(0, UserID,  "query db ret failed, ret=%d, errmsg=%s, sql=%s", Ret, m_DBConn[DBIndex].GetErrMsg(), SqlStr);
         return 0;
     }
 
@@ -455,8 +456,8 @@ int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd)
     }
 
     //读取数据
-    MYSQL_ROW CurRow = m_DBConn[Index].FetchRecord();
-    unsigned long *pCurRowLen = m_DBConn[Index].FetchLength();
+    MYSQL_ROW CurRow = m_DBConn[DBIndex].FetchRecord();
+    unsigned long *pCurRowLen = m_DBConn[DBIndex].FetchLength();
 
     if ((CurRow[0] == NULL)||(pCurRowLen[0] == 0))
     {
@@ -483,14 +484,15 @@ int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd)
 int CAuth::Register(const std::string& strPasswd, uint64_t& UserID)
 {
     UserID = time(NULL);  // 这里还没想好方案，先这样子吧
-    int Index = UserID%DATABASE_NUM;
+    int DBIndex = UserID%DATABASE_NUM;
+    int TableIndex = (UserID>>1)%TABLE_NUM;
     
     char SqlStr[1024] = {0};
-    int SqlLen = snprintf(SqlStr, sizeof(SqlStr), "insert into %s.%s (userid, passwd) values (%lu, '%s')", m_DBConfig[Index].DBName, m_DBConfig[Index].TableName, UserID, strPasswd.c_str());
-    int Ret = m_DBConn[Index].Query(SqlStr, SqlLen);
+    int SqlLen = snprintf(SqlStr, sizeof(SqlStr), "insert into %s.%s_%d (userid, passwd) values (%lu, '%s')", m_DBConfig[DBIndex].DBName, m_DBConfig[DBIndex].TableName, TableIndex, UserID, strPasswd.c_str());
+    int Ret = m_DBConn[DBIndex].Query(SqlStr, SqlLen);
     if (Ret != 0)
     {
-        XF_LOG_WARN(0, UserID,  "query db failed, ret=%d, errmsg=%s, sql=%s", Ret, m_DBConn[Index].GetErrMsg(), SqlStr);
+        XF_LOG_WARN(0, UserID,  "query db failed, ret=%d, errmsg=%s, sql=%s", Ret, m_DBConn[DBIndex].GetErrMsg(), SqlStr);
         return 0;
     }
 
