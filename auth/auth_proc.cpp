@@ -123,6 +123,7 @@ int CAuth::Init(const char *pConfFile)
     {
         IniFile.GetInt("AUTH", "ServerID", 0, (int*)&m_ServerID);
         IniFile.GetString("AUTH", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
+        IniFile.GetString("AUTH", "DBConfPath", "", DBConfPath, sizeof(DBConfPath));
         IniFile.GetInt("AUTH", "StateTime", 0, &m_StateTime);
         
         IniFile.GetString("LOG", "ModuleName", "auth", ModuleName, sizeof(ModuleName));
@@ -235,7 +236,7 @@ int CAuth::Init(const char *pConfFile)
         Ret = m_DBConn[i].Connect(m_DBConfig[i].Host, m_DBConfig[i].User, m_DBConfig[i].Pass, m_DBConfig[i].DBName, m_DBConfig[i].Port);
         if (Ret != 0)
         {
-            XF_LOG_ERROR(0, 0, "Connect DB[%s:%s@%s:%d:%s] failed, Ret=%d, ErrMsg=%s", m_DBConfig[i].User, m_DBConfig[i].Pass, m_DBConfig[i].Host, m_DBConfig[i].Port, m_DBConfig[i].DBName, Ret, m_DBConn[i].GetErrMsg());
+            printf("Connect DB[%s:%s@%s:%d:%s] failed, Ret=%d, ErrMsg=%s\n", m_DBConfig[i].User, m_DBConfig[i].Pass, m_DBConfig[i].Host, m_DBConfig[i].Port, m_DBConfig[i].DBName, Ret, m_DBConn[i].GetErrMsg());
             return -1;
         }
     }
