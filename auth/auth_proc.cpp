@@ -65,6 +65,13 @@ CAuth::CAuth()
     m_ServerID = 0;
     m_StateTime = 0;
     m_pSendBuff = NULL;
+
+    m_DBPort = 0;
+    memset(m_DBHost, 0x0, sizeof(m_DBHost));
+    memset(m_DBUser, 0x0, sizeof(m_DBUser));
+    memset(m_DBPass, 0x0, sizeof(m_DBPass));
+    memset(m_DBName, 0x0, sizeof(m_DBName));
+    memset(m_TableName, 0x0, sizeof(m_TableName));
 }
 
 CAuth::~CAuth()
@@ -112,6 +119,12 @@ int CAuth::Init(const char *pConfFile)
         IniFile.GetInt("AUTH", "ServerID", 0, (int*)&m_ServerID);
         IniFile.GetString("AUTH", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
         IniFile.GetInt("AUTH", "StateTime", 0, &m_StateTime);
+        IniFile.GetString("AUTH", "Host", "", m_DBHost, sizeof(m_DBHost));
+        IniFile.GetInt("AUTH", "Port", 0, &m_DBPort);
+        IniFile.GetString("AUTH", "User", "", m_DBUser, sizeof(m_DBUser));
+        IniFile.GetString("AUTH", "Pass", "", m_DBPass, sizeof(m_DBPass));
+        IniFile.GetString("AUTH", "DB", "", m_DBName, sizeof(m_DBName));
+        IniFile.GetString("AUTH", "Table", "", m_TableName, sizeof(m_TableName));
         
         IniFile.GetString("LOG", "ModuleName", "auth", ModuleName, sizeof(ModuleName));
         IniFile.GetInt("LOG", "LogLocal", 1, &LogLocal);
@@ -200,7 +213,12 @@ int CAuth::Init(const char *pConfFile)
     
     printf("init m_SendQueue succ, key=0x%x, size=%u\n", SendShmKey, SendShmSize);
 
-    
+    Ret = m_DBConn.Connect(m_DBHost, m_DBUser, m_DBPass, m_DBName, m_DBPort);
+    if (Ret != 0)
+    {
+        XF_LOG_ERROR(0, 0, "Connect DB[%s:%s@%s:%d:%s] failed, Ret=%d, ErrMsg=%s", m_DBUser, m_DBPass, m_DBHost, m_DBPort, m_DBName, Ret, m_DBConn.GetErrMsg());
+        return -1;
+    }
 
     printf("svr init success\n");
 
@@ -364,9 +382,46 @@ int CAuth::Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, ch
 }
 
 
+/* 0 系统错误  1 验证通过  2 密码错误或用户不存在 */
 int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd)
 {
-    return 1;
+    char SqlStr[1024] = {0};
+    int RecNum = 0;
+    int SqlLen = snprintf(SqlStr, sizeof(SqlStr), "select passwd from %s.%s where userid=%lu", m_DBName, m_TableName, UserID);
+    int Ret = m_DBConn.Query(SqlStr, SqlLen, &RecNum);
+    if (Ret != 0)
+    {
+        XF_LOG_WARN(0, UserID,  "query db ret failed, ret=%d, errmsg=%s, sql=%s", Ret, m_DBConn.GetErrMsg(), SqlStr);
+        return 0;
+    }
+
+    if(RecNum == 0)
+    {
+        return 2;
+    }
+
+    //读取数据
+    MYSQL_ROW CurRow = m_DBConn.FetchRecord();
+    unsigned long *pCurRowLen = m_DBConn.FetchLength();
+
+    if ((CurRow[0] == NULL)||(pCurRowLen[0] == 0))
+    {
+        XF_LOG_WARN(0, UserID,  "sql query ret is not valid, prow=%s, len=%ld", CurRow[0], pCurRowLen[0]);
+        return 0;
+    }
+
+    string strResult(CurRow[0], pCurRowLen[0]);
+
+    if (strResult != strPasswd)
+    {
+        return 2;
+    }
+    else
+    {
+        return 1;
+    }
+    
+    return 0;
 }
 
 
