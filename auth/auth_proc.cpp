@@ -67,12 +67,15 @@ CAuth::CAuth()
     m_StateTime = 0;
     m_pSendBuff = NULL;
 
-    m_DBPort = 0;
-    memset(m_DBHost, 0x0, sizeof(m_DBHost));
-    memset(m_DBUser, 0x0, sizeof(m_DBUser));
-    memset(m_DBPass, 0x0, sizeof(m_DBPass));
-    memset(m_DBName, 0x0, sizeof(m_DBName));
-    memset(m_TableName, 0x0, sizeof(m_TableName));
+    for(int i = 0; i < DATABASE_NUM; i++)
+    {
+        m_DBConfig[i].Port = 0;
+        memset(m_DBConfig[i].Host, 0x0, sizeof(m_DBConfig[i].Host));
+        memset(m_DBConfig[i].User, 0x0, sizeof(m_DBConfig[i].User));
+        memset(m_DBConfig[i].Pass, 0x0, sizeof(m_DBConfig[i].Pass));
+        memset(m_DBConfig[i].DBName, 0x0, sizeof(m_DBConfig[i].DBName));
+        memset(m_DBConfig[i].TableName, 0x0, sizeof(m_DBConfig[i].TableName));
+    }
 }
 
 CAuth::~CAuth()
@@ -114,18 +117,13 @@ int CAuth::Init(const char *pConfFile)
     char LogPath[1024] = {0};
 
     char BusConfPath[256] = {0};
-
+    char DBConfPath[256] = {0};
+    
     if (IniFile.IsValid())
     {
         IniFile.GetInt("AUTH", "ServerID", 0, (int*)&m_ServerID);
         IniFile.GetString("AUTH", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
         IniFile.GetInt("AUTH", "StateTime", 0, &m_StateTime);
-        IniFile.GetString("AUTH", "Host", "", m_DBHost, sizeof(m_DBHost));
-        IniFile.GetInt("AUTH", "Port", 0, &m_DBPort);
-        IniFile.GetString("AUTH", "User", "", m_DBUser, sizeof(m_DBUser));
-        IniFile.GetString("AUTH", "Pass", "", m_DBPass, sizeof(m_DBPass));
-        IniFile.GetString("AUTH", "DB", "", m_DBName, sizeof(m_DBName));
-        IniFile.GetString("AUTH", "Table", "", m_TableName, sizeof(m_TableName));
         
         IniFile.GetString("LOG", "ModuleName", "auth", ModuleName, sizeof(ModuleName));
         IniFile.GetInt("LOG", "LogLocal", 1, &LogLocal);
@@ -214,13 +212,34 @@ int CAuth::Init(const char *pConfFile)
     
     printf("init m_SendQueue succ, key=0x%x, size=%u\n", SendShmKey, SendShmSize);
 
-    Ret = m_DBConn.Connect(m_DBHost, m_DBUser, m_DBPass, m_DBName, m_DBPort);
-    if (Ret != 0)
+    CIniFile DBFile(DBConfPath);
+    if (!DBFile.IsValid())
     {
-        XF_LOG_ERROR(0, 0, "Connect DB[%s:%s@%s:%d:%s] failed, Ret=%d, ErrMsg=%s", m_DBUser, m_DBPass, m_DBHost, m_DBPort, m_DBName, Ret, m_DBConn.GetErrMsg());
+        printf("ERR:conf file [%s] is not valid\n", DBConfPath);
         return -1;
     }
 
+    for(int i = 0; i < DATABASE_NUM; i++)
+    {
+        string str = CStrTool::Format("DB_%d", i);
+        DBFile.GetString(str.c_str(), "Host", "", m_DBConfig[i].Host, sizeof(m_DBConfig[i].Host));
+        DBFile.GetInt(str.c_str(), "Port", 0, &m_DBConfig[i].Port);
+        DBFile.GetString(str.c_str(), "User", "", m_DBConfig[i].User, sizeof(m_DBConfig[i].User));
+        DBFile.GetString(str.c_str(), "Pass", "", m_DBConfig[i].Pass, sizeof(m_DBConfig[i].Pass));
+        DBFile.GetString(str.c_str(), "DB", "", m_DBConfig[i].DBName, sizeof(m_DBConfig[i].DBName));
+        DBFile.GetString(str.c_str(), "Table", "", m_DBConfig[i].TableName, sizeof(m_DBConfig[i].TableName));
+    }
+    
+    for(int i = 0; i < DATABASE_NUM; i++)
+    {
+        Ret = m_DBConn[i].Connect(m_DBConfig[i].Host, m_DBConfig[i].User, m_DBConfig[i].Pass, m_DBConfig[i].DBName, m_DBConfig[i].Port);
+        if (Ret != 0)
+        {
+            XF_LOG_ERROR(0, 0, "Connect DB[%s:%s@%s:%d:%s] failed, Ret=%d, ErrMsg=%s", m_DBConfig[i].User, m_DBConfig[i].Pass, m_DBConfig[i].Host, m_DBConfig[i].Port, m_DBConfig[i].DBName, Ret, m_DBConn[i].GetErrMsg());
+            return -1;
+        }
+    }
+    
     printf("svr init success\n");
 
     if(!m_pSendBuff)
@@ -417,13 +436,15 @@ int CAuth::Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, ch
 /* 0 系统错误  1 验证通过  2 密码错误或用户不存在 */
 int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd)
 {
+    int Index = UserID%DATABASE_NUM;
+    
     char SqlStr[1024] = {0};
     int RecNum = 0;
-    int SqlLen = snprintf(SqlStr, sizeof(SqlStr), "select passwd from %s.%s where userid=%lu", m_DBName, m_TableName, UserID);
-    int Ret = m_DBConn.Query(SqlStr, SqlLen, &RecNum);
+    int SqlLen = snprintf(SqlStr, sizeof(SqlStr), "select passwd from %s.%s where userid=%lu", m_DBConfig[Index].DBName, m_DBConfig[Index].TableName, UserID);
+    int Ret = m_DBConn[Index].Query(SqlStr, SqlLen, &RecNum);
     if (Ret != 0)
     {
-        XF_LOG_WARN(0, UserID,  "query db ret failed, ret=%d, errmsg=%s, sql=%s", Ret, m_DBConn.GetErrMsg(), SqlStr);
+        XF_LOG_WARN(0, UserID,  "query db ret failed, ret=%d, errmsg=%s, sql=%s", Ret, m_DBConn[Index].GetErrMsg(), SqlStr);
         return 0;
     }
 
@@ -433,8 +454,8 @@ int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd)
     }
 
     //读取数据
-    MYSQL_ROW CurRow = m_DBConn.FetchRecord();
-    unsigned long *pCurRowLen = m_DBConn.FetchLength();
+    MYSQL_ROW CurRow = m_DBConn[Index].FetchRecord();
+    unsigned long *pCurRowLen = m_DBConn[Index].FetchLength();
 
     if ((CurRow[0] == NULL)||(pCurRowLen[0] == 0))
     {
@@ -461,13 +482,14 @@ int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd)
 int CAuth::Register(const std::string& strPasswd, uint64_t& UserID)
 {
     UserID = time(NULL);  // 这里还没想好方案，先这样子吧
+    int Index = UserID%DATABASE_NUM;
     
     char SqlStr[1024] = {0};
-    int SqlLen = snprintf(SqlStr, sizeof(SqlStr), "insert into %s.%s (userid, passwd) values (%lu, '%s')", m_DBName, m_TableName, UserID, strPasswd.c_str());
-    int Ret = m_DBConn.Query(SqlStr, SqlLen);
+    int SqlLen = snprintf(SqlStr, sizeof(SqlStr), "insert into %s.%s (userid, passwd) values (%lu, '%s')", m_DBConfig[Index].DBName, m_DBConfig[Index].TableName, UserID, strPasswd.c_str());
+    int Ret = m_DBConn[Index].Query(SqlStr, SqlLen);
     if (Ret != 0)
     {
-        XF_LOG_WARN(0, UserID,  "query db ret failed, ret=%d, errmsg=%s, sql=%s", Ret, m_DBConn.GetErrMsg(), SqlStr);
+        XF_LOG_WARN(0, UserID,  "query db failed, ret=%d, errmsg=%s, sql=%s", Ret, m_DBConn[Index].GetErrMsg(), SqlStr);
         return 0;
     }
 

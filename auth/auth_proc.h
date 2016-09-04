@@ -11,6 +11,18 @@
 #include "common.h"
 #include "header.h"
 
+
+
+typedef struct tagMysqlConfig
+{
+    char Host[32];
+    int Port;
+    char User[256];
+    char Pass[256];
+    char DBName[256];
+    char TableName[256];
+}MysqlConfig;
+
 class CAuth
 {
     public:
@@ -32,13 +44,9 @@ class CAuth
         unsigned int m_ServerID;
         int m_StateTime;
 
-        char m_DBHost[32];
-        int m_DBPort;
-        char m_DBUser[256];
-        char m_DBPass[256];
-        char m_DBName[256];
-        char m_TableName[256];
-        mmlib::CMySQL m_DBConn;
+        // 这里设计成分库分表的方式
+        MysqlConfig m_DBConfig[DATABASE_NUM];
+        mmlib::CMySQL m_DBConn[DATABASE_NUM];
         
         mmlib::CShmQueue m_SendQueue;
         mmlib::CShmQueue m_RecvQueue;

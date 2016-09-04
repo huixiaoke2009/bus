@@ -12,6 +12,9 @@ const int XY_MAX_CONN_NUM = 100000;   //最大连接数
 const int MAX_NAME_LENGTH = 24;
 const int MAX_FRIEND_NUM = 200;
 
+// auth常量
+const int DATABASE_NUM = 4;
+
 
 // 服务器与组
 const int GROUP_CONN = 100;
