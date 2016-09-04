@@ -17,6 +17,7 @@ const int MAX_FRIEND_NUM = 200;
 const int GROUP_CONN = 100;
 const int GROUP_AUTH = 200;
 const int GROUP_GNS = 300;
+const int GROUP_USER = 400;
 
 const int SERVER_GNS = 301; //目前的设定是GNS只有一台
 

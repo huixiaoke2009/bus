@@ -33,6 +33,10 @@ const unsigned int Cmd_Disconnect_Rsp = 0x00010004;
 
 
 /******************* AUTH模块 *******************/
+// 注册
+const unsigned int Cmd_Auth_Register_Req = 0x00020001;
+const unsigned int Cmd_Auth_Register_Rsp = 0x00020002;
+
 
 
 /******************* GNS模块 *******************/

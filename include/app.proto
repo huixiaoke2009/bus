@@ -13,4 +13,13 @@ message LoginRsp
     required int32 ret = 1;
 }
 
+message RegisterReq
+{
+    required string passwd = 1;
+}
 
+message RegisterRsp
+{
+    required int32 ret = 1;
+    required uint64 userid = 2;
+}

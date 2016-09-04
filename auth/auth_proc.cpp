@@ -17,6 +17,7 @@
 
 #include "bus.pb.h"
 #include "mm.pb.h"
+#include "app.pb.h"
 #include "bus_header.h"
 
 
@@ -295,6 +296,7 @@ int CAuth::Run()
 
 int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
 {
+    int Ret = 0;
     XYHeaderIn HeaderIn;
     HeaderIn.Read(pCurBuffPos);
     int HeaderInLen = HeaderIn.GetHeaderLen();
@@ -321,6 +323,36 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
             XYHeaderIn Header;
             Header.SrcID = GetServerID();
             Header.CmdID = Cmd_Login_Rsp;
+            Header.SN = HeaderIn.SN;
+            Header.ConnPos = HeaderIn.ConnPos;
+            Header.UserID = HeaderIn.UserID;
+            Header.PkgTime = time(NULL);
+            Header.Ret = 0;
+            
+            Send2Server(Header, HeaderIn.SrcID, TO_SRV, 0, CurRsp);
+            
+            break;
+        }
+        case Cmd_Auth_Register_Req:
+        {
+            app::RegisterReq CurReq;
+            if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
+            {
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Auth_Register_Req);
+                return -1;
+            }
+
+            string strPasswd = CurReq.passwd();
+            
+            uint64_t UserID = 0;
+            Ret = Register(strPasswd, UserID);
+            app::RegisterRsp CurRsp;
+            CurRsp.set_userid(UserID);
+            CurRsp.set_ret(Ret);
+
+            XYHeaderIn Header;
+            Header.SrcID = GetServerID();
+            Header.CmdID = Cmd_Auth_Register_Rsp;
             Header.SN = HeaderIn.SN;
             Header.ConnPos = HeaderIn.ConnPos;
             Header.UserID = HeaderIn.UserID;
@@ -423,6 +455,25 @@ int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd)
     
     return 0;
 }
+
+
+/* 0 系统错误  1 注册成功 */
+int CAuth::Register(const std::string& strPasswd, uint64_t& UserID)
+{
+    UserID = time(NULL);  // 这里还没想好方案，先这样子吧
+    
+    char SqlStr[1024] = {0};
+    int SqlLen = snprintf(SqlStr, sizeof(SqlStr), "insert into %s.%s values (%lu, '%s')", m_DBName, m_TableName, UserID, strPasswd.c_str());
+    int Ret = m_DBConn.Query(SqlStr, SqlLen);
+    if (Ret != 0)
+    {
+        XF_LOG_WARN(0, UserID,  "query db ret failed, ret=%d, errmsg=%s, sql=%s", Ret, m_DBConn.GetErrMsg(), SqlStr);
+        return 0;
+    }
+
+    return 1;
+}
+
 
 
 int CAuth::SendStateMessage()

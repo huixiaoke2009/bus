@@ -25,6 +25,7 @@ class CAuth
         int DealPkg(const char *pCurBuffPos, int PkgLen);
         int Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message);
         int LoginCheck(uint64_t UserID, const std::string& strPasswd);
+        int Register(const std::string& strPasswd, uint64_t& UserID);
         int SendStateMessage();
         
     private:
