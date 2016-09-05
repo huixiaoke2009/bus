@@ -442,7 +442,7 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
             CurRsp.set_userid(UserID);
             CurRsp.set_serverid(ServerID);
             CurRsp.set_connpos(ConnPos);
-            CurRsp.set_ret(1);
+            CurRsp.set_ret(0);
 
             XYHeaderIn Header;
             Header.SrcID = GetServerID();

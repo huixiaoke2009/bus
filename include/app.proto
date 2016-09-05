@@ -23,3 +23,13 @@ message RegisterRsp
     required int32 ret = 1;
     required uint64 userid = 2;
 }
+
+message AddFriendReq
+{
+    required uint64 userid = 1;
+}
+
+message AddFriendRsp
+{
+    required int32 ret = 1;
+}

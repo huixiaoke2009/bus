@@ -9,12 +9,14 @@ const int XY_MAX_CONN_NUM = 100000;   //最大连接数
 
 
 //user常量
-const int MAX_NAME_LENGTH = 24;
-const int MAX_FRIEND_NUM = 200;
+const int MAX_NAME_LENGTH = 24;     // 用户名，昵称等长度
+const int MAX_FRIEND_NUM = 200;     // 最大好友数量
+const int MAX_REQUEST_NUM = 50;    // 最多用户请求
+const int MAX_USER_SERVER_NUM = 4;  // user服务器数量，决定某个userid去哪台服务器处理
 
 // auth常量
-const int DATABASE_NUM = 4;
-const int TABLE_NUM = 2;
+const int DATABASE_NUM = 4;         // auth分库分表的库数量
+const int TABLE_NUM = 2;            // auth分库分表的表数量
 
 // 服务器与组
 const int GROUP_CONN = 100;
@@ -23,7 +25,7 @@ const int GROUP_GNS = 300;
 const int GROUP_USER = 400;
 
 const int SERVER_GNS = 301; //目前的设定是GNS只有一台
-
+const int SERVER_USER_BEGIN = 400;
 
 // 命令字前缀
 const unsigned int CMD_PREFIX_SYS = 0x0000;

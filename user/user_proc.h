@@ -33,6 +33,18 @@ typedef struct tagFriendInfo
     }
 }FriendInfo;
 
+typedef struct tagRequestInfo
+{
+    uint64_t UserID;
+    char NickName[MAX_NAME_LENGTH];
+    uint64_t RequestTime;
+
+    tagRequestInfo()
+    {
+        memset(this, 0x0, sizeof(tagRequestInfo));
+    }
+}RequestInfo;
+
 typedef struct tagShmUserInfo
 {
     uint64_t UserID;
@@ -42,6 +54,7 @@ typedef struct tagShmUserInfo
     char Sex;
     
     FriendInfo FriendList[MAX_FRIEND_NUM];
+    RequestInfo RequestList[MAX_REQUEST_NUM];
     
     tagShmUserInfo()
     {

@@ -434,7 +434,7 @@ int CAuth::Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, ch
 }
 
 
-/* 0 系统错误  1 验证通过  2 密码错误或用户不存在 */
+/* 0 验证通过  1 系统错误  2 密码错误或用户不存在 */
 int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd)
 {
     int DBIndex = UserID%DATABASE_NUM;
@@ -447,7 +447,7 @@ int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd)
     if (Ret != 0)
     {
         XF_LOG_WARN(0, UserID,  "query db ret failed, ret=%d, errmsg=%s, sql=%s", Ret, m_DBConn[DBIndex].GetErrMsg(), SqlStr);
-        return 0;
+        return 1;
     }
 
     if(RecNum == 0)
@@ -462,7 +462,7 @@ int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd)
     if ((CurRow[0] == NULL)||(pCurRowLen[0] == 0))
     {
         XF_LOG_WARN(0, UserID,  "sql query ret is not valid, prow=%s, len=%ld", CurRow[0], pCurRowLen[0]);
-        return 0;
+        return 1;
     }
 
     string strResult(CurRow[0], pCurRowLen[0]);
@@ -473,10 +473,10 @@ int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd)
     }
     else
     {
-        return 1;
+        return 0;
     }
     
-    return 0;
+    return 1;
 }
 
 
@@ -493,10 +493,10 @@ int CAuth::Register(const std::string& strPasswd, uint64_t& UserID)
     if (Ret != 0)
     {
         XF_LOG_WARN(0, UserID,  "query db failed, ret=%d, errmsg=%s, sql=%s", Ret, m_DBConn[DBIndex].GetErrMsg(), SqlStr);
-        return 0;
+        return 1;
     }
 
-    return 1;
+    return 0;
 }
 
 

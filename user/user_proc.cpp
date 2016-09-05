@@ -17,6 +17,7 @@
 
 #include "bus.pb.h"
 #include "mm.pb.h"
+#include "app.pb.h"
 #include "bus_header.h"
 
 
@@ -422,19 +423,19 @@ int CUser::DealPkg(const char *pCurBuffPos, int PkgLen)
     {
         case Cmd_User_AddFriend_Req:
         {
-            mm::GNSRegisterReq CurReq;
+            app::AddFriendReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_GNS_Register_Req);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_User_AddFriend_Req);
                 return -1;
             }
 
-            
-            mm::GNSRegisterRsp CurRsp;
+            app::AddFriendRsp CurRsp;
+            CurRsp.set_ret(0);
 
             XYHeaderIn Header;
             Header.SrcID = GetServerID();
-            Header.CmdID = Cmd_GNS_Register_Rsp;
+            Header.CmdID = Cmd_User_AddFriend_Rsp;
             Header.SN = HeaderIn.SN;
             Header.ConnPos = HeaderIn.ConnPos;
             Header.UserID = HeaderIn.UserID;

@@ -1369,7 +1369,7 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
 
     if(CurHeader.CmdID == Cmd_StateChange)
     {
-        if(SendType == TO_GRP)
+        if(SendType != TO_SRV)
         {
             XF_LOG_WARN(0, 0, "SendType:%d error", SendType);
             return -1;

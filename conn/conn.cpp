@@ -1302,7 +1302,8 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
         }
         case CMD_PREFIX_USER:
         {
-            Send2Server(GROUP_USER, TO_GRP, 0, pProcessBuff, TotalPkgLen);
+            int ServerID = SERVER_USER_BEGIN + CurHeaderIn.UserID % MAX_USER_SERVER_NUM + 1;
+            Send2Server(ServerID, TO_SRV, 0, pProcessBuff, TotalPkgLen);
             break;
         }
         default:
@@ -1337,7 +1338,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             uint64_t UserID = CurRsp.userid();
             int Result = CurRsp.ret();
             
-            if(Result != 1)
+            if(Result != 0)
             {
                 // 不成功,返回客户端失败原因
                 
@@ -1405,7 +1406,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             unsigned int ConnPos = CurRsp.connpos();
             int Result = CurRsp.ret();
             
-            if(Result == 1 && ServerID == GetServerID())
+            if(Result == 0 && ServerID == GetServerID())
             {
                 std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(ConnPos);
                 if(iter == m_PosConnMap.end())
@@ -1418,11 +1419,11 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
 
                 m_UserIDConnMap[UserID] = iter->second;
                 
-                CurRsp2.set_ret(1);
+                CurRsp2.set_ret(0);
             }
             else
             {
-                CurRsp2.set_ret(0);
+                CurRsp2.set_ret(1);
             }
             
             XYHeader CurHeader;
