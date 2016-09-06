@@ -56,7 +56,7 @@ typedef struct tagShmUserInfo
     char PersonalNote[MAX_PERSONAL_NOTE_LENGTH];
     char TelNo[MAX_TELNO_LENGTH];
     char Address[MAX_ADDR_LENGTH];
-    char eMail[MAX_EMAIL_LENGTH];
+    char EMail[MAX_EMAIL_LENGTH];
     
     FriendInfo FriendList[MAX_FRIEND_NUM];
     RequestInfo RequestList[MAX_REQUEST_NUM];
