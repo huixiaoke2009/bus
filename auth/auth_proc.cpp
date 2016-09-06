@@ -323,12 +323,12 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
     
     switch(HeaderIn.CmdID)
     {
-        case Cmd_Login_Req:
+        case Cmd_Auth_Login_Req:
         {
-            mm::LoginReq CurReq;
+            app::LoginReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Login_Req);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Auth_Login_Req);
                 return -1;
             }
 
@@ -342,7 +342,7 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
 
             XYHeaderIn Header;
             Header.SrcID = GetServerID();
-            Header.CmdID = Cmd_Login_Rsp;
+            Header.CmdID = Cmd_Auth_Login_Rsp;
             Header.SN = HeaderIn.SN;
             Header.ConnPos = HeaderIn.ConnPos;
             Header.UserID = HeaderIn.UserID;

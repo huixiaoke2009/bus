@@ -1254,7 +1254,7 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
         pProcessBuff = m_pProcessBuff;
     }
 
-    if(CurHeaderIn.CmdID != Cmd_Login_Req && CurHeaderIn.CmdID != Cmd_Auth_Register_Req && pConnInfoMap->second->GetConnType() != CONN_AUTH)
+    if(CurHeaderIn.CmdID != Cmd_Auth_Login_Req && CurHeaderIn.CmdID != Cmd_Auth_Register_Req && pConnInfoMap->second->GetConnType() != CONN_AUTH)
     {
         return CurHeader.PkgLen;
     }
@@ -1264,7 +1264,8 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
     {
         case CMD_PREFIX_CONN:
         {
-            if(CurHeaderIn.CmdID == Cmd_Login_Req)
+            /*
+            if(CurHeaderIn.CmdID == Cmd_Auth_Login_Req)
             {
                 app::LoginReq CurReq;
                 if(!CurReq.ParseFromArray(pProcessBuff+CurHeaderIn.GetHeaderLen(), PkgInLen))
@@ -1287,6 +1288,7 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
                 XF_LOG_WARN(0, 0, "Unknow CmdID %0x", CurHeader.CmdID);
                 return -1;
             }
+            */
             
             break;
         }
@@ -1325,14 +1327,14 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
     
     switch(Header.CmdID)
     {
-        case Cmd_Login_Rsp:
+        case Cmd_Auth_Login_Rsp:
         {
             int ConnPos = Header.ConnPos;
             
-            mm::LoginRsp CurRsp;
+            app::LoginRsp CurRsp;
             if(!CurRsp.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmd=%0x", Cmd_Login_Rsp);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmd=%0x", Cmd_Auth_Login_Rsp);
                 return -1;
             }
 
@@ -1348,7 +1350,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 
                 XYHeader CurHeader;
                 CurHeader.PkgLen = PkgLen - Header.GetHeaderLen()+ CurHeader.GetHeadLen();
-                CurHeader.CmdID = Cmd_Login_Rsp;
+                CurHeader.CmdID = Cmd_Auth_Login_Rsp;
                 CurHeader.SN = Header.SN;
                 CurHeader.CkSum = 0;
                 CurHeader.Ret = Header.Ret;
@@ -1429,7 +1431,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             
             XYHeader CurHeader;
             CurHeader.PkgLen = CurRsp2.ByteSize() + CurHeader.GetHeadLen();
-            CurHeader.CmdID = Cmd_Login_Rsp;
+            CurHeader.CmdID = Cmd_Auth_Login_Rsp;
             CurHeader.SN = Header.SN;
             CurHeader.CkSum = 0;
             CurHeader.Ret = Header.Ret;

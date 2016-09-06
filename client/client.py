@@ -32,7 +32,7 @@ class CClient:
         CurReq.passwd = self.Passwd;
         content = CurReq.SerializeToString();
         headerlen = XY_HEADER_LEN + len(content)
-        header = struct.pack(PACKAGE_HEADER, headerlen, 0x00010001, 0, 0, 0, 0);
+        header = struct.pack(PACKAGE_HEADER, headerlen, 0x00020003, 0, 0, 0, 0);
         data = header + content
         self.s.sendall(data);
         recv_data = self.s.recv(XY_PKG_MAX_LEN);
