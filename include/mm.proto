@@ -8,18 +8,6 @@ message ErrorMsg
     required int32 errcode = 1;
 }
 
-// 登录协议(服务器内部)
-message LoginReq
-{
-    required uint64 userid = 1;
-    required string passwd = 2;
-}
-
-message LoginRsp
-{
-    required uint64 userid = 1;
-    required int32 ret = 2; // 1表示成功
-}
 
 // GNS登记协议
 message GNSRegisterReq
@@ -34,7 +22,7 @@ message GNSRegisterRsp
     required uint64 userid = 1;
     required int32 serverid = 2;
     required uint32 connpos = 3;
-    required int32 ret = 4; // 1表示成功
+    required int32 ret = 4; // 0表示成功
 }
 
 // GNS取消登记协议
@@ -50,7 +38,7 @@ message GNSUnRegisterRsp
     required uint64 userid = 1;
     required int32 serverid = 2;
     required uint32 connpos = 3;
-    required int32 ret = 4; // 1表示成功
+    required int32 ret = 4; // 0表示成功
 }
 
 // 通知连接层断开某条链接
@@ -66,7 +54,7 @@ message DisconnectRsp
     required uint64 userid = 1;
     required int32 serverid = 2;
     required uint32 connpos = 3;
-    required int32 ret = 4; // 1表示成功
+    required int32 ret = 4; // 0表示成功
 }
 
 message FriendInfo

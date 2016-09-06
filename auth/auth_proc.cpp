@@ -336,7 +336,7 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
             string strPasswd = CurReq.passwd();
             int Result = LoginCheck(UserID, strPasswd);
 
-            mm::LoginRsp CurRsp;
+            app::LoginRsp CurRsp;
             CurRsp.set_userid(UserID);
             CurRsp.set_ret(Result);
 
