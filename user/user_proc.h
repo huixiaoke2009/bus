@@ -20,11 +20,11 @@ typedef struct tagUserMemHead
     unsigned int CurUserSN;
 }UserMemHead;
 
+#pragma pack(1)
 typedef struct tagFriendInfo
 {
     uint64_t UserID;
     char RemarkName[MAX_NAME_LENGTH];
-    char GroupName[MAX_NAME_LENGTH];
     char SeeStatus; // 可见情况
 
     tagFriendInfo()
@@ -49,9 +49,14 @@ typedef struct tagShmUserInfo
 {
     uint64_t UserID;
     char NickName[MAX_NAME_LENGTH];
-    unsigned short Level;
-    unsigned short VipLevel;
+    int Level;
+    int VipLevel;
     char Sex;
+    uint64_t Birthday;
+    char PersonalNote[MAX_PERSONAL_NOTE_LENGTH];
+    char TelNo[MAX_TELNO_LENGTH];
+    char Address[MAX_ADDR_LENGTH];
+    char eMail[MAX_EMAIL_LENGTH];
     
     FriendInfo FriendList[MAX_FRIEND_NUM];
     RequestInfo RequestList[MAX_REQUEST_NUM];
@@ -62,6 +67,7 @@ typedef struct tagShmUserInfo
     }
     
 }ShmUserInfo;
+#pragma pack()
 
 class CUser
 {

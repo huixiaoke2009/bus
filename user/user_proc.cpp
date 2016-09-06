@@ -255,19 +255,19 @@ int CUser::Init(const char *pConfFile)
     
     if (UserShmKey == 0)
     {
-        printf("ERR:conf GNS/UserShmKey is not valid\n");
+        printf("ERR:conf User/UserShmKey is not valid\n");
         return -1;
     }
 
     if (UserShmSize == 0)
     {
-        printf("ERR:conf GNS/UserShmSize is not valid\n");
+        printf("ERR:conf User/UserShmSize is not valid\n");
         return -1;
     }
     
     if (m_MaxUserNodeNum == 0)
     {
-        printf("ERR:conf GNS/NodeNum is not valid\n");
+        printf("ERR:conf User/NodeNum is not valid\n");
         return -1;
     }
 
