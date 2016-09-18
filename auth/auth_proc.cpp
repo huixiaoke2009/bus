@@ -323,26 +323,38 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
     
     switch(HeaderIn.CmdID)
     {
-        case Cmd_Auth_Login_Req:
+        case Cmd_Auth_Register_Req:
         {
-            app::LoginReq CurReq;
+            mm::AuthRegisterReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Auth_Login_Req);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Auth_Register_Req);
                 return -1;
             }
 
-            uint64_t UserID = CurReq.userid();
             string strPasswd = CurReq.passwd();
-            int Result = LoginCheck(UserID, strPasswd);
-
-            app::LoginRsp CurRsp;
+            string strNickName = CurReq.nickname();
+            int Sex = CurReq.sex();
+            uint64_t Birthday = CurReq.birthday();
+            string strTelNo = CurReq.telno(); 
+            string strAddress = CurReq.address();
+            string strEmail = CurReq.email();
+            
+            uint64_t UserID = 0;
+            Ret = Register(strPasswd, UserID);
+            mm::AuthRegisterRsp CurRsp;
             CurRsp.set_userid(UserID);
-            CurRsp.set_ret(Result);
-
+            CurRsp.set_nickname(strNickName);
+            CurRsp.set_sex(Sex);
+            CurRsp.set_birthday(Birthday);
+            CurRsp.set_telno(strTelNo);
+            CurRsp.set_address(strAddress);
+            CurRsp.set_email(strEmail);
+            CurRsp.set_ret(Ret);
+            
             XYHeaderIn Header;
             Header.SrcID = GetServerID();
-            Header.CmdID = Cmd_Auth_Login_Rsp;
+            Header.CmdID = Cmd_Auth_Register_Rsp;
             Header.SN = HeaderIn.SN;
             Header.ConnPos = HeaderIn.ConnPos;
             Header.UserID = HeaderIn.UserID;
@@ -353,26 +365,28 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
             
             break;
         }
-        case Cmd_Auth_Register_Req:
+        case Cmd_Auth_Login_Req:
         {
-            app::RegisterReq CurReq;
+            mm::AuthLoginReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Auth_Register_Req);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Auth_Login_Req);
                 return -1;
             }
 
+            uint64_t UserID = CurReq.userid();
             string strPasswd = CurReq.passwd();
+            int Plat = CurReq.plat();
             
-            uint64_t UserID = 0;
-            Ret = Register(strPasswd, UserID);
-            app::RegisterRsp CurRsp;
+            int Result = LoginCheck(UserID, strPasswd, Plat);
+
+            mm::AuthLoginRsp CurRsp;
             CurRsp.set_userid(UserID);
-            CurRsp.set_ret(Ret);
+            CurRsp.set_ret(Result);
 
             XYHeaderIn Header;
             Header.SrcID = GetServerID();
-            Header.CmdID = Cmd_Auth_Register_Rsp;
+            Header.CmdID = Cmd_Auth_Login_Rsp;
             Header.SN = HeaderIn.SN;
             Header.ConnPos = HeaderIn.ConnPos;
             Header.UserID = HeaderIn.UserID;
@@ -435,7 +449,7 @@ int CAuth::Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, ch
 
 
 /* 0 验证通过  1 系统错误  2 密码错误或用户不存在 */
-int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd)
+int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd, int Plat)
 {
     int DBIndex = UserID%DATABASE_NUM;
     int TableIndex = (UserID>>1)%TABLE_NUM;

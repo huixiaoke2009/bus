@@ -36,7 +36,7 @@ class CAuth
     private:
         int DealPkg(const char *pCurBuffPos, int PkgLen);
         int Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message);
-        int LoginCheck(uint64_t UserID, const std::string& strPasswd);
+        int LoginCheck(uint64_t UserID, const std::string& strPasswd, int Plat);
         int Register(const std::string& strPasswd, uint64_t& UserID);
         int SendStateMessage();
         
@@ -44,7 +44,7 @@ class CAuth
         unsigned int m_ServerID;
         int m_StateTime;
 
-        // 这里设计成分库分表的方式
+        // ???????????????
         MysqlConfig m_DBConfig[DATABASE_NUM];
         mmlib::CMySQL m_DBConn[DATABASE_NUM];
         

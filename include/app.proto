@@ -6,6 +6,7 @@ message LoginReq
 {
     required uint64 userid = 1;
     required string passwd = 2;
+    required int32 plat = 3; // 登录平台 
 }
 
 message LoginRsp
@@ -17,6 +18,12 @@ message LoginRsp
 message RegisterReq
 {
     required string passwd = 1;
+    required string nickname = 2;
+    required int32 sex = 3;
+    required uint64 birthday = 4;
+    required string telno = 5;
+    required string address = 6;
+    required string email = 7;
 }
 
 message RegisterRsp

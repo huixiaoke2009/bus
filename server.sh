@@ -24,6 +24,7 @@ stop()
     killall conn
     killall auth
     killall gns
+    killall user
 }
 
 usage()

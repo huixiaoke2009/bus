@@ -2,13 +2,74 @@
 
 package mm;
 
+/********************* 公用部分 **********************/
 //内部公用错误协议
 message ErrorMsg
 {
     required int32 errcode = 1;
+    optional string errmsg = 2;
 }
 
 
+/********************* CONN部分 **********************/
+// 通知连接层断开某条链接
+message DisconnectReq
+{
+    required uint64 userid = 1;
+    required int32 serverid = 2;
+    required uint32 connpos = 3;
+}
+
+message DisconnectRsp
+{
+    required uint64 userid = 1;
+    required int32 serverid = 2;
+    required uint32 connpos = 3;
+    required int32 ret = 4; // 0表示成功
+}
+
+/********************* AUTH部分 **********************/
+// 注册
+message AuthRegisterReq
+{
+    required string passwd = 1;
+    required string nickname = 2;
+    required int32 sex = 3;
+    required uint64 birthday = 4;
+    required string telno = 5;
+    required string address = 6;
+    required string email = 7;
+}
+
+message AuthRegisterRsp
+{
+    required uint64 userid = 1;
+    required string nickname = 2;
+    required int32 sex = 3;
+    required uint64 birthday = 4;
+    required string telno = 5;
+    required string address = 6;
+    required string email = 7;
+    required int32 ret = 8;     // 0表示成功
+}
+
+
+// 登录
+message AuthLoginReq
+{
+    required uint64 userid = 1;
+    required string passwd = 2;
+    required int32 plat = 3; // 登录平台 
+}
+
+message AuthLoginRsp
+{
+    required int32 userid = 1;
+    required int32 ret = 2;
+}
+
+
+/********************* GNS部分 **********************/
 // GNS登记协议
 message GNSRegisterReq
 {
@@ -41,28 +102,22 @@ message GNSUnRegisterRsp
     required int32 ret = 4; // 0表示成功
 }
 
-// 通知连接层断开某条链接
-message DisconnectReq
-{
-    required uint64 userid = 1;
-    required int32 serverid = 2;
-    required uint32 connpos = 3;
-}
 
-message DisconnectRsp
-{
-    required uint64 userid = 1;
-    required int32 serverid = 2;
-    required uint32 connpos = 3;
-    required int32 ret = 4; // 0表示成功
-}
 
+/********************* USER部分 **********************/
+// 用户基本信息结构体UserInfo
 message FriendInfo
 {
     required uint64 userid = 1;
     required string remarkname = 2;
-    required string groupname = 3;
-    required int32 seestatus = 4;
+    required int32 seestatus = 3;
+}
+
+message RequestInfo
+{
+    required uint64 userid = 1;
+    required string nickname = 2;
+    required uint64 requesttime = 3;
 }
 
 message UserInfo
@@ -72,8 +127,32 @@ message UserInfo
     required uint32 level = 3;
     required uint32 viplevel = 4;
     required int32 sex = 5;
-    repeated FriendInfo friendlist = 6;
+    required uint64 birthday = 6;
+    required string telno = 7;
+    required string address = 8;
+    required string email = 9;
+    repeated FriendInfo friendlist = 10;
+    repeated RequestInfo requestlist = 11;
 }
+
+// 注册
+message UserRegisterReq
+{
+    required uint64 userid = 1;
+    required string nickname = 2;
+    required int32 sex = 3;
+    required uint64 birthday = 4;
+    required string telno = 5;
+    required string address = 6;
+    required string email = 7;
+}
+
+message UserRegisterRsp
+{
+    required uint64 userid = 1;
+    required int32 ret = 2;     // 0表示成功
+}
+
 
 //加载用户信息
 message LoaderUserInfoReq
@@ -88,6 +167,7 @@ message LoaderUserInfoRsp
     required string request = 2;
 }
 
+// 添加好友信息
 message UserAddFriendReq
 {
     required uint64 userid = 1;

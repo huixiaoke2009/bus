@@ -1264,7 +1264,10 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
     {
         case CMD_PREFIX_CONN:
         {
-            /*
+            break;
+        }
+        case CMD_PREFIX_AUTH:
+        {
             if(CurHeaderIn.CmdID == Cmd_Auth_Login_Req)
             {
                 app::LoginReq CurReq;
@@ -1276,25 +1279,48 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
 
                 uint64_t UserID = CurReq.userid();
                 string strPasswd = CurReq.passwd();
+                int Plat = CurReq.plat();
                 
-                mm::LoginReq CurReq2;
+                mm::AuthLoginReq CurReq2;
                 CurReq2.set_userid(UserID);
                 CurReq2.set_passwd(strPasswd);
+                CurReq2.set_plat(Plat);
+
+                Send2Server(CurHeaderIn, GROUP_AUTH, TO_GRP, 0, CurReq2);
+            }
+            else if(CurHeaderIn.CmdID == Cmd_Auth_Register_Req)
+            {
+                app::RegisterReq CurReq;
+                if(!CurReq.ParseFromArray(pProcessBuff+CurHeaderIn.GetHeaderLen(), PkgInLen))
+                {
+                    XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", CurHeaderIn.CmdID);
+                    return -1;
+                }
+
+                string strPasswd = CurReq.passwd();
+                string strNickName = CurReq.nickname();
+                int Sex = CurReq.sex();
+                uint64_t Birthday = CurReq.birthday();
+                string strTelNo = CurReq.telno(); 
+                string strAddress = CurReq.address();
+                string strEmail = CurReq.email();
+                
+                mm::AuthRegisterReq CurReq2;
+                CurReq2.set_passwd(strPasswd);
+                CurReq2.set_nickname(strNickName);
+                CurReq2.set_sex(Sex);
+                CurReq2.set_birthday(Birthday);
+                CurReq2.set_telno(strTelNo);
+                CurReq2.set_address(strAddress);
+                CurReq2.set_email(strEmail);
 
                 Send2Server(CurHeaderIn, GROUP_AUTH, TO_GRP, 0, CurReq2);
             }
             else
             {
-                XF_LOG_WARN(0, 0, "Unknow CmdID %0x", CurHeader.CmdID);
-                return -1;
+                Send2Server(GROUP_AUTH, TO_GRP, 0, pProcessBuff, TotalPkgLen);
             }
-            */
             
-            break;
-        }
-        case CMD_PREFIX_AUTH:
-        {
-            Send2Server(GROUP_AUTH, TO_GRP, 0, pProcessBuff, TotalPkgLen);
             break;
         }
         case CMD_PREFIX_GNS:
@@ -1327,11 +1353,25 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
     
     switch(Header.CmdID)
     {
+        case Cmd_Auth_Register_Rsp:
+        {
+            mm::AuthRegisterRsp CurRsp;
+            if(!CurRsp.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
+            {
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Disconnect_Req);
+                return -1;
+            }
+
+            mm::UserRegisterReq CurReq;
+
+            
+            break;
+        }
         case Cmd_Auth_Login_Rsp:
         {
             int ConnPos = Header.ConnPos;
             
-            app::LoginRsp CurRsp;
+            mm::AuthLoginRsp CurRsp;
             if(!CurRsp.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
             {
                 XF_LOG_WARN(0, 0, "pkg parse failed, cmd=%0x", Cmd_Auth_Login_Rsp);

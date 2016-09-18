@@ -47,8 +47,10 @@ const unsigned int Cmd_GNS_UnRegister_Req = 0x00030003;
 const unsigned int Cmd_GNS_UnRegister_Rsp = 0x00030004;
 
 /******************* USER模块 *******************/
+const unsigned int Cmd_User_Register_Req = 0x00040001;
+const unsigned int Cmd_User_Register_Rsp = 0x00040002;
 
-const unsigned int Cmd_User_AddFriend_Req = 0x00040001;
-const unsigned int Cmd_User_AddFriend_Rsp = 0x00040002;
+const unsigned int Cmd_User_AddFriend_Req = 0x00040003;
+const unsigned int Cmd_User_AddFriend_Rsp = 0x00040004;
 
 #endif
