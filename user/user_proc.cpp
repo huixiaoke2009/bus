@@ -421,14 +421,58 @@ int CUser::DealPkg(const char *pCurBuffPos, int PkgLen)
     
     switch(HeaderIn.CmdID)
     {
-        case Cmd_Auth_Register_Req:
+        case Cmd_User_Register_Req:
         {
             mm::UserRegisterReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_User_AddFriend_Req);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", HeaderIn.CmdID);
                 return -1;
             }
+
+            uint64_t UserID = CurReq.userid();
+            string strNickName = CurReq.nickname();
+            int Sex = CurReq.sex();
+            uint64_t Birthday = CurReq.birthday();
+            string strTelNo = CurReq.telno(); 
+            string strAddress = CurReq.address();
+            string strEmail = CurReq.email();
+
+            ShmUserInfo Info;
+            Info.UserID = UserID;
+            snprintf(Info.NickName, MAX_NAME_LENGTH, "%s", strNickName.c_str());
+            Info.Level = 0;
+            Info.VipLevel = 0;
+            Info.Sex = Sex % 2;
+            Info.Birthday = Birthday;
+            snprintf(Info.TelNo, MAX_TELNO_LENGTH, "%s", strTelNo.c_str());
+            snprintf(Info.Address, MAX_ADDR_LENGTH, "%s", strAddress.c_str());
+            snprintf(Info.EMail, MAX_EMAIL_LENGTH, "%s", strEmail.c_str());
+
+            mm::UserRegisterRsp CurRsp;
+            CurRsp.set_userid(UserID);
+            
+            Ret = m_UserInfoMap.Insert(UserID, Info);
+            if(Ret != 0)
+            {
+                CurRsp.set_ret(1);
+                XF_LOG_WARN(0, UserID, "Insert failed, Ret=%d", Ret);
+            }
+            else
+            {
+                CurRsp.set_ret(0);
+            }
+            
+            XYHeaderIn Header;
+            Header.SrcID = GetServerID();
+            Header.CmdID = Cmd_User_Register_Rsp;
+            Header.SN = HeaderIn.SN;
+            Header.ConnPos = HeaderIn.ConnPos;
+            Header.UserID = HeaderIn.UserID;
+            Header.PkgTime = time(NULL);
+            Header.Ret = 0;
+            
+            Send2Server(Header, HeaderIn.SrcID, TO_SRV, 0, CurRsp);
             
             break;
         }
@@ -437,7 +481,7 @@ int CUser::DealPkg(const char *pCurBuffPos, int PkgLen)
             app::AddFriendReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_User_AddFriend_Req);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", HeaderIn.CmdID);
                 return -1;
             }
 

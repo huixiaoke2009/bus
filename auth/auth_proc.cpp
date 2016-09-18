@@ -328,7 +328,7 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
             mm::AuthRegisterReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Auth_Register_Req);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", HeaderIn.CmdID);
                 return -1;
             }
 
@@ -370,7 +370,7 @@ int CAuth::DealPkg(const char *pCurBuffPos, int PkgLen)
             mm::AuthLoginReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Auth_Login_Req);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", HeaderIn.CmdID);
                 return -1;
             }
 

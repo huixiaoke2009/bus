@@ -383,7 +383,7 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
             mm::GNSRegisterReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_GNS_Register_Req);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", HeaderIn.CmdID);
                 return -1;
             }
 
@@ -462,7 +462,7 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
             mm::GNSUnRegisterReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_GNS_UnRegister_Req);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", HeaderIn.CmdID);
                 return -1;
             }
 
@@ -507,7 +507,7 @@ int CGns::DealPkg(const char *pCurBuffPos, int PkgLen)
             mm::DisconnectRsp CurRsp;
             if(!CurRsp.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Disconnect_Rsp);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", HeaderIn.CmdID);
                 return -1;
             }
 

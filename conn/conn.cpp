@@ -1359,7 +1359,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             mm::AuthRegisterRsp CurRsp;
             if(!CurRsp.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Disconnect_Req);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Header.CmdID);
                 return -1;
             }
 
@@ -1409,7 +1409,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
 
                 XYHeaderIn CurHeader;
                 CurHeader.SrcID = GetServerID();
-                CurHeader.CmdID = Cmd_Auth_Register_Req;
+                CurHeader.CmdID = Cmd_User_Register_Req;
                 CurHeader.SN = Header.SN;
                 CurHeader.ConnPos = ConnPos;
                 CurHeader.UserID = Header.UserID;
@@ -1428,6 +1428,43 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             
             break;
         }
+        case Cmd_User_Register_Rsp:
+        {
+            int ConnPos = Header.ConnPos;
+            
+            mm::UserRegisterRsp CurRsp;
+            if(!CurRsp.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
+            {
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmd=%0x", Header.CmdID);
+                return -1;
+            }
+
+            int Result = CurRsp.ret();
+            uint64_t UserID = CurRsp.userid();
+
+            app::RegisterRsp CurRsp2;
+            CurRsp2.set_userid(UserID);
+            CurRsp2.set_ret(Result);
+
+            XYHeader CurHeader;
+            CurHeader.PkgLen = CurRsp2.ByteSize() + CurHeader.GetHeadLen();
+            CurHeader.CmdID = Cmd_Auth_Register_Rsp;
+            CurHeader.SN = Header.SN;
+            CurHeader.CkSum = 0;
+            CurHeader.Ret = Header.Ret;
+            CurHeader.Compresse = 0;
+            CurHeader.Write(m_pSendBuff);
+            int HeaderLen = CurHeader.GetHeadLen();
+            if(!CurRsp2.SerializeToArray(m_pSendBuff+HeaderLen, XY_PKG_MAX_LEN-HeaderLen))
+            {
+                XF_LOG_WARN(0, 0, "pack err msg failed");
+                return -1;
+            }
+
+            Send2Client(ConnPos, m_pSendBuff, CurHeader.PkgLen);
+            
+            break;
+        }
         case Cmd_Auth_Login_Rsp:
         {
             int ConnPos = Header.ConnPos;
@@ -1435,7 +1472,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             mm::AuthLoginRsp CurRsp;
             if(!CurRsp.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmd=%0x", Cmd_Auth_Login_Rsp);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmd=%0x", Header.CmdID);
                 return -1;
             }
 
@@ -1499,7 +1536,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             mm::GNSRegisterRsp CurRsp;
             if(!CurRsp.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_GNS_Register_Rsp);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Header.CmdID);
                 return -1;
             }
 
@@ -1554,7 +1591,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             mm::DisconnectReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_Disconnect_Req);
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Header.CmdID);
                 return -1;
             }
             
