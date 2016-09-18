@@ -16,7 +16,7 @@ const int MAX_PERSONAL_NOTE_LENGTH = 256;   // 个人描述长度
 const int MAX_TELNO_LENGTH = 11;
 const int MAX_ADDR_LENGTH = 256;
 const int MAX_EMAIL_LENGTH = 64;
-const int MAX_USER_SERVER_NUM = 4;  // user服务器数量，决定某个userid去哪台服务器处理
+const int MAX_USER_SERVER_NUM = 1;  // user服务器数量，决定某个userid去哪台服务器处理
 
 // auth常量
 const int DATABASE_NUM = 4;         // auth分库分表的库数量

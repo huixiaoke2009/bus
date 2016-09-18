@@ -1,21 +1,10 @@
+#!/bin/bash
+
 start()
 {
     echo 'wait'
 }
 
-start1()
-{
-    ./bus/bus ./bus/conf/bus.ini
-    sleep 1
-    ./logsvr/logsvr ./logsvr/conf/logsvr.ini
-    sleep 1
-    ./conn/conn ./conn/conf/conn.ini
-}
-
-start2()
-{
-    echo 'wait2'
-}
 
 stop()
 {
@@ -32,11 +21,8 @@ usage()
     echo "$0 <start|stop|restart>"
 }
 
-if [ "$1" = "start1" ];then
-    start1
-
-elif [ "$1" = "start2" ];then
-    start2
+if [ "$1" = "start" ];then
+    start
 
 elif [ "$1" = "stop" ];then
     stop

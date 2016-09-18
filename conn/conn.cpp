@@ -1330,8 +1330,7 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
         }
         case CMD_PREFIX_USER:
         {
-            //int ServerID = SERVER_USER_BEGIN + CurHeaderIn.UserID % MAX_USER_SERVER_NUM + 1;
-            int ServerID = 401;
+            int ServerID = SERVER_USER_BEGIN + CurHeaderIn.UserID % MAX_USER_SERVER_NUM + 1;
             Send2Server(ServerID, TO_SRV, 0, pProcessBuff, TotalPkgLen);
             break;
         }
@@ -1355,6 +1354,8 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
     {
         case Cmd_Auth_Register_Rsp:
         {
+            int ConnPos = Header.ConnPos;
+            
             mm::AuthRegisterRsp CurRsp;
             if(!CurRsp.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
             {
@@ -1362,8 +1363,68 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 return -1;
             }
 
-            mm::UserRegisterReq CurReq;
+            int Result = CurRsp.ret();
+            uint64_t UserID = CurRsp.userid();
+            string strNickName = CurRsp.nickname();
+            int Sex = CurRsp.sex();
+            uint64_t Birthday = CurRsp.birthday();
+            string strTelNo = CurRsp.telno(); 
+            string strAddress = CurRsp.address();
+            string strEmail = CurRsp.email();
+            
+            if(Result != 0)
+            {
+                // 不成功,返回客户端失败原因
+                app::RegisterRsp CurRsp2;
+                CurRsp2.set_ret(Result);
+                CurRsp2.set_userid(UserID);
+                
+                XYHeader CurHeader;
+                CurHeader.PkgLen = CurRsp2.ByteSize() + CurHeader.GetHeadLen();
+                CurHeader.CmdID = Cmd_Auth_Register_Rsp;
+                CurHeader.SN = Header.SN;
+                CurHeader.CkSum = 0;
+                CurHeader.Ret = Header.Ret;
+                CurHeader.Compresse = 0;
+                CurHeader.Write(m_pSendBuff);
+                int HeaderLen = CurHeader.GetHeadLen();
+                if(!CurRsp2.SerializeToArray(m_pSendBuff+HeaderLen, XY_PKG_MAX_LEN-HeaderLen))
+                {
+                    XF_LOG_WARN(0, 0, "pack err msg failed");
+                    return -1;
+                }
 
+                Send2Client(ConnPos, m_pSendBuff, CurHeader.PkgLen);
+            }
+            else
+            {
+                mm::UserRegisterReq CurReq;
+                CurReq.set_userid(UserID);
+                CurReq.set_nickname(strNickName);
+                CurReq.set_sex(Sex);
+                CurReq.set_birthday(Birthday);
+                CurReq.set_telno(strTelNo);
+                CurReq.set_address(strAddress);
+                CurReq.set_email(strEmail);
+
+                XYHeaderIn CurHeader;
+                CurHeader.SrcID = GetServerID();
+                CurHeader.CmdID = Cmd_Auth_Register_Req;
+                CurHeader.SN = Header.SN;
+                CurHeader.ConnPos = ConnPos;
+                CurHeader.UserID = Header.UserID;
+                CurHeader.PkgTime = time(NULL);
+                CurHeader.Ret = 0;
+
+                if(!CurReq.SerializeToArray(m_pSendBuff+CurHeader.GetHeaderLen(), XY_PKG_MAX_LEN-CurHeader.GetHeaderLen()))
+                {
+                    XF_LOG_WARN(0, 0, "pack err msg failed");
+                    return -1;
+                }
+
+                int ServerID = SERVER_USER_BEGIN + UserID % MAX_USER_SERVER_NUM + 1;
+                Send2Server(CurHeader, ServerID, TO_SRV, 0, CurReq);
+            }
             
             break;
         }
@@ -1389,7 +1450,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 CurRsp2.set_ret(Result);
                 
                 XYHeader CurHeader;
-                CurHeader.PkgLen = PkgLen - Header.GetHeaderLen()+ CurHeader.GetHeadLen();
+                CurHeader.PkgLen = CurRsp2.ByteSize() + CurHeader.GetHeadLen();
                 CurHeader.CmdID = Cmd_Auth_Login_Rsp;
                 CurHeader.SN = Header.SN;
                 CurHeader.CkSum = 0;

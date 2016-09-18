@@ -421,6 +421,17 @@ int CUser::DealPkg(const char *pCurBuffPos, int PkgLen)
     
     switch(HeaderIn.CmdID)
     {
+        case Cmd_Auth_Register_Req:
+        {
+            mm::UserRegisterReq CurReq;
+            if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
+            {
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Cmd_User_AddFriend_Req);
+                return -1;
+            }
+            
+            break;
+        }
         case Cmd_User_AddFriend_Req:
         {
             app::AddFriendReq CurReq;

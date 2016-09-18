@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 import socket
 import struct 
 import time
@@ -46,11 +47,20 @@ class CClient:
         print CurRsp.ret;
         if CurRsp.ret != 0:
             print 'login error'
+            return -1;
+            
+        return 0;
             
     def SendRecvRegisterReq(self):
         passwd = '12345';
         CurReq = app_pb2.RegisterReq();
         CurReq.passwd = passwd;
+        CurReq.nickname = 'mama';
+        CurReq.sex = 0;
+        CurReq.birthday = 1472978293;
+        CurReq.telno = '13724872174';
+        CurReq.address = u'广东省揭阳市惠来县仙庵镇京陇乡京东古祖东巷18号广东省揭阳市惠来县仙庵镇京陇乡京东古祖东巷18号';
+        CurReq.email = 'huixiaoke2009huixiaoke2009@qq.com'
         content = CurReq.SerializeToString();
         headerlen = XY_HEADER_LEN + len(content)
         header = struct.pack(PACKAGE_HEADER, headerlen, 0x00020001, 0, 0, 0, 0);
@@ -66,9 +76,12 @@ class CClient:
         print CurRsp.ret;
         if CurRsp.ret != 0:
             print 'register error'
+            return -1;
         
         self.UserID = CurRsp.userid;
         self.Passwd = passwd;
+        
+        return 0;
     
     def SendRecvAddFriendReq(self):
         CurReq = app_pb2.AddFriendReq();
@@ -89,11 +102,22 @@ class CClient:
         print CurRsp.ret;
         if CurRsp.ret != 0:
             print 'add friend error'
+            return -1;
+        
+        return 0;
             
     def Run(self):
-        #self.SendRecvRegisterReq();
-        self.SendRecvLoginReq();
-        self.SendRecvAddFriendReq();
+        Ret = 0;
+        Ret = self.SendRecvRegisterReq();
+        if Ret != 0:
+            return -1;
+            
+        Ret = self.SendRecvLoginReq();
+        if Ret != 0:
+            return -1;
+        #self.SendRecvAddFriendReq();
+        
+        return 0;
     
 def main():
     c = CClient('192.168.206.128', 10000);
