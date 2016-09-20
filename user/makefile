@@ -8,7 +8,7 @@ LIBS = ../mmlib/mmlib.a ../include/bus.a /usr/local/lib/libprotobuf.a
 TARGETS = user
 all:$(TARGETS)
 
-user:user_main.o user_proc.o
+user:user_main.o user_proc.o user_shm_api.o 
 	$(CXX) $^ $(LIBS) -o $@ -lz
 
 %.o: %.cpp
