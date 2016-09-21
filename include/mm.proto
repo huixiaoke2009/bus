@@ -154,19 +154,6 @@ message UserRegisterRsp
 }
 
 
-//加载用户信息
-message LoaderUserInfoReq
-{
-    required uint64 userid = 1;
-    required string request = 2;
-}
-
-message LoaderUserInfoRsp
-{
-    required UserInfo userinfo = 1;
-    required string request = 2;
-}
-
 // 添加好友信息
 message UserAddFriendReq
 {
@@ -176,4 +163,23 @@ message UserAddFriendReq
 message UserAddFriendRsp
 {
 
+}
+
+/********************* LOAD WRITE部分 **********************/
+//加载用户信息
+message LoadUserInfoReq
+{
+    required uint64 userid = 1;
+    required bytes request = 2;
+}
+
+message LoadUserInfoRsp
+{
+    required uint64 userid = 1;
+    optional bytes request = 2;
+}
+
+message WriteUserInfoReq
+{
+    required uint64 userid = 1;
 }

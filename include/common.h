@@ -64,7 +64,12 @@ enum
     BUS_SVR_OFFLINE = 2,
 };
 
-
-
+// 用户状态
+enum
+{
+    USER_STATUS_INIT    = 0,
+    USER_STATUS_LOADING = 1,
+    USER_STATUS_LOADED  = 2,
+};
 
 #endif

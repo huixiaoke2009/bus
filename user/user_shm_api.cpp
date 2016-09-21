@@ -4,6 +4,9 @@
 #include "log/log.h"
 #include "util/util.h"
 #include "ini_file/ini_file.h"
+#include "bus.pb.h"
+#include "mm.pb.h"
+#include "app.pb.h"
 
 using namespace std;
 using namespace mmlib;
@@ -32,6 +35,7 @@ int CUserShmApi::Init(const char *pConfFile)
     int LoaderShmSize = 0;
     int WriterShmKey = 0;
     int WriterShmSize = 0;
+    char UserLockPath[256] = {0};
     
     if (IniFile.IsValid())
     {
@@ -42,6 +46,7 @@ int CUserShmApi::Init(const char *pConfFile)
         IniFile.GetInt("USER", "WriterShmKey", 0, &WriterShmKey);
         IniFile.GetInt("USER", "WriterShmSize", 0, &WriterShmSize);
         IniFile.GetInt("USER", "NodeNum", 0, &m_MaxUserNodeNum);
+        IniFile.GetString("USER", "UserLockPath", "user.lock", UserLockPath, sizeof(UserLockPath));
     }
     else
     {
@@ -137,6 +142,7 @@ int CUserShmApi::Init(const char *pConfFile)
         return -1;
     }
 
+    LOCK_ALL(CFileLock::FILE_LOCK_WRITE);
     bool ClearFlag = false;
     if (memcmp(m_pUserHead->Magic, USER_MEM_MAGIC, sizeof(m_pUserHead->Magic)) != 0)
     {
@@ -171,13 +177,27 @@ int CUserShmApi::Init(const char *pConfFile)
     {
         printf("INFO:user info map verify succ\n");
     }
+
+    Ret = m_UserInfoLock.Init(UserLockPath);
+    if (Ret != m_UserInfoLock.SUCCESS)
+    {
+        printf("ERR:init user lock failed, ret=%d\n", Ret);
+        return -1;
+    }
     
     return 0;
 }
 
 int CUserShmApi::Register(const ShmUserInfo& Info)
 {
+    if(Info.UserID == 0)
+    {
+        XF_LOG_WARN(0, 0, "UserID == 0 is illegal");
+        return -1;
+    }
+    
     int Ret = 0;
+    LOCK_HASHLIST_HEAD(CFileLock::FILE_LOCK_WRITE);
     Ret = m_UserInfoMap.Insert(Info.UserID, Info);
     if(Ret != 0)
     {
@@ -185,6 +205,85 @@ int CUserShmApi::Register(const ShmUserInfo& Info)
         return -1;
     }
 
+    WriteUserInfo(Info.UserID);
+
+    return 0;
+}
+
+
+int CUserShmApi::RemoveUserInfo(uint64_t UserID)
+{
+    int Ret = 0;
+    LOCK_HASHLIST_HEAD(CFileLock::FILE_LOCK_WRITE);
+    LOCK_USER(CFileLock::FILE_LOCK_WRITE, UserID);
+
+    XF_LOG_INFO(0, UserID, "UserID = %lu Remove", UserID);
+
+    Ret = m_UserInfoMap.Remove(UserID);
+    if(Ret != 0)
+    {
+        XF_LOG_WARN(0, UserID, "Remove failed, Ret=%d", Ret);
+        return -1;
+    }
+
+    return 0;
+}
+
+int CUserShmApi::LoadUserInfo(uint64_t UserID, const string& strRequest)
+{
+    int Ret = 0;
+    
+    mm::LoadUserInfoReq CurReq;
+    CurReq.set_userid(UserID);
+    CurReq.set_request(strRequest);
+
+    const int BuffLen = XY_PKG_MAX_LEN;
+    char acBuff[BuffLen] = {0};
+
+    int PkgLen = CurReq.ByteSize();
+
+    if(!CurReq.SerializeToArray(acBuff, BuffLen))
+    {
+        XF_LOG_WARN(0, 0, "pack err msg failed");
+        return -1;
+    }
+    
+    Ret = m_LoaderQueue.InQueue(acBuff, PkgLen);
+    if(Ret != CShmQueue::SUCCESS)
+    {
+        XF_LOG_WARN(0, UserID, "WriteUserInfo failed, Ret=%d", Ret);
+        return -1;
+    }
+    
+    return 0;
+}
+
+
+int CUserShmApi::WriteUserInfo(uint64_t UserID)
+{
+    int Ret = 0;
+    
+    mm::WriteUserInfoReq CurReq;
+    CurReq.set_userid(UserID);
+
+    const int BuffLen = 256;
+    char acBuff[BuffLen] = {0};
+
+    int PkgLen = CurReq.ByteSize();
+
+    if(!CurReq.SerializeToArray(acBuff, BuffLen))
+    {
+        XF_LOG_WARN(0, 0, "pack err msg failed");
+        return -1;
+    }
+    
+    Ret = m_WriterQueue.InQueue(acBuff, PkgLen);
+    if(Ret != CShmQueue::SUCCESS)
+    {
+        XF_LOG_WARN(0, UserID, "WriteUserInfo failed, Ret=%d", Ret);
+        return -1;
+    }
+    
     return 0;
 }
 

@@ -9,6 +9,8 @@
 #include "shm_queue/shm_queue.h"
 #include "common.h"
 #include "header.h"
+#include "filelock.h"
+
 
 const char USER_MEM_MAGIC[] = "THIS IS USER MEM AAAAAAAAAAA";
 const short USER_MEM_HEAD_SIZE = 256;
@@ -47,6 +49,7 @@ typedef struct tagRequestInfo
 typedef struct tagShmUserInfo
 {
     uint64_t UserID;
+    int Status;
     char NickName[MAX_NAME_LENGTH];
     int Level;
     int VipLevel;
@@ -77,8 +80,13 @@ class CUserShmApi
 
         int Init(const char *pConfFile);
         int Register(const ShmUserInfo& Info);
+        int RemoveUserInfo(uint64_t UserID);
+        int LoadUserInfo(uint64_t UserID, const std::string& strRequest);
+        int WriteUserInfo(uint64_t UserID);
    private:
 
+        mmlib::CFileLock m_UserInfoLock;
+        
         int m_MaxUserNodeNum;
         mmlib::CShareMem m_UserMem;
         UserMemHead* m_pUserHead;
