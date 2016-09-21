@@ -55,10 +55,10 @@ typedef struct tagShmUserInfo
     int VipLevel;
     char Sex;
     uint64_t Birthday;
-    char PersonalNote[MAX_PERSONAL_NOTE_LENGTH];
     char TelNo[MAX_TELNO_LENGTH];
     char Address[MAX_ADDR_LENGTH];
     char EMail[MAX_EMAIL_LENGTH];
+    char PersonalNote[MAX_PERSONAL_NOTE_LENGTH];
     
     FriendInfo FriendList[MAX_FRIEND_NUM];
     RequestInfo RequestList[MAX_REQUEST_NUM];
@@ -81,8 +81,8 @@ class CUserShmApi
         int Init(const char *pConfFile);
         int Register(const ShmUserInfo& Info);
         int RemoveUserInfo(uint64_t UserID);
-        int LoadUserInfo(uint64_t UserID, const std::string& strRequest);
-        int WriteUserInfo(uint64_t UserID);
+        int GetUserInfo(uint64_t UserID, ShmUserInfo& Info);
+        
    private:
 
         mmlib::CFileLock m_UserInfoLock;
@@ -91,10 +91,6 @@ class CUserShmApi
         mmlib::CShareMem m_UserMem;
         UserMemHead* m_pUserHead;
         mmlib::CHashListNoLock<uint64_t, ShmUserInfo> m_UserInfoMap;
-
-        mmlib::CShmQueue m_LoaderQueue;
-        mmlib::CShmQueue m_WriterQueue;
-
 };
 
 

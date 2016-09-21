@@ -25,6 +25,8 @@ class CUser
         int DealPkg(const char *pCurBuffPos, int PkgLen);
         int Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message);
         int SendStateMessage();
+        int LoadUserInfo(uint64_t UserID, const std::string& strRequest);
+        int WriteUserInfo(uint64_t UserID);
         
     private:
         unsigned int m_ServerID;
@@ -32,6 +34,9 @@ class CUser
         
         mmlib::CShmQueue m_SendQueue;
         mmlib::CShmQueue m_RecvQueue;
+
+        mmlib::CShmQueue m_LoaderQueue;
+        mmlib::CShmQueue m_WriterQueue;
 
         char* m_pSendBuff;
 

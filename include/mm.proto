@@ -120,7 +120,7 @@ message RequestInfo
     required uint64 requesttime = 3;
 }
 
-message UserInfo
+message DBUserInfo
 {
     required uint64 userid = 1;
     required string nickname = 2;
@@ -131,8 +131,9 @@ message UserInfo
     required string telno = 7;
     required string address = 8;
     required string email = 9;
-    repeated FriendInfo friendlist = 10;
-    repeated RequestInfo requestlist = 11;
+    required string personalnote = 10;
+    repeated FriendInfo friendlist = 11;
+    repeated RequestInfo requestlist = 12;
 }
 
 // 注册

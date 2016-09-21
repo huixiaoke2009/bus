@@ -67,7 +67,7 @@ CAuth::CAuth()
     m_StateTime = 0;
     m_pSendBuff = NULL;
 
-    for(int i = 0; i < DATABASE_NUM; i++)
+    for(int i = 0; i < AUTH_DATABASE_NUM; i++)
     {
         m_DBConfig[i].Port = 0;
         memset(m_DBConfig[i].Host, 0x0, sizeof(m_DBConfig[i].Host));
@@ -220,7 +220,7 @@ int CAuth::Init(const char *pConfFile)
         return -1;
     }
 
-    for(int i = 0; i < DATABASE_NUM; i++)
+    for(int i = 0; i < AUTH_DATABASE_NUM; i++)
     {
         string str = CStrTool::Format("DB_%d", i);
         DBFile.GetString(str.c_str(), "Host", "", m_DBConfig[i].Host, sizeof(m_DBConfig[i].Host));
@@ -231,7 +231,7 @@ int CAuth::Init(const char *pConfFile)
         DBFile.GetString(str.c_str(), "Table", "", m_DBConfig[i].TableName, sizeof(m_DBConfig[i].TableName));
     }
     
-    for(int i = 0; i < DATABASE_NUM; i++)
+    for(int i = 0; i < AUTH_DATABASE_NUM; i++)
     {
         Ret = m_DBConn[i].Connect(m_DBConfig[i].Host, m_DBConfig[i].User, m_DBConfig[i].Pass, m_DBConfig[i].DBName, m_DBConfig[i].Port);
         if (Ret != 0)
@@ -451,8 +451,8 @@ int CAuth::Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, ch
 /* 0 验证通过  1 系统错误  2 密码错误或用户不存在 */
 int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd, int Plat)
 {
-    int DBIndex = UserID%DATABASE_NUM;
-    int TableIndex = (UserID>>1)%TABLE_NUM;
+    int DBIndex = UserID%AUTH_DATABASE_NUM;
+    int TableIndex = (UserID>>1)%AUTH_TABLE_NUM;
     
     char SqlStr[1024] = {0};
     int RecNum = 0;
@@ -498,8 +498,8 @@ int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd, int Plat)
 int CAuth::Register(const std::string& strPasswd, uint64_t& UserID)
 {
     UserID = time(NULL);  // 这里还没想好方案，先这样子吧
-    int DBIndex = UserID%DATABASE_NUM;
-    int TableIndex = (UserID>>1)%TABLE_NUM;
+    int DBIndex = UserID%AUTH_DATABASE_NUM;
+    int TableIndex = (UserID>>1)%AUTH_TABLE_NUM;
     
     char SqlStr[1024] = {0};
     int SqlLen = snprintf(SqlStr, sizeof(SqlStr), "insert into %s.%s_%d (userid, passwd) values (%lu, '%s')", m_DBConfig[DBIndex].DBName, m_DBConfig[DBIndex].TableName, TableIndex, UserID, strPasswd.c_str());

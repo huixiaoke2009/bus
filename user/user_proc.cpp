@@ -105,7 +105,11 @@ int CUser::Init(const char *pConfFile)
     int LogLocal = 0;
     int LogLevel = 0;
     char LogPath[1024] = {0};
-    
+
+    int LoaderShmKey = 0;
+    int LoaderShmSize = 0;
+    int WriterShmKey = 0;
+    int WriterShmSize = 0;
     char BusConfPath[256] = {0};
 
     if (IniFile.IsValid())
@@ -113,6 +117,10 @@ int CUser::Init(const char *pConfFile)
         IniFile.GetInt("USER", "ServerID", 0, (int*)&m_ServerID);
         IniFile.GetString("USER", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
         IniFile.GetInt("USER", "StateTime", 0, &m_StateTime);
+        IniFile.GetInt("USER", "LoaderShmKey", 0, &LoaderShmKey);
+        IniFile.GetInt("USER", "LoaderShmSize", 0, &LoaderShmSize);
+        IniFile.GetInt("USER", "WriterShmKey", 0, &WriterShmKey);
+        IniFile.GetInt("USER", "WriterShmSize", 0, &WriterShmSize);
         
         IniFile.GetString("LOG", "ModuleName", "user", ModuleName, sizeof(ModuleName));
         IniFile.GetInt("LOG", "LogLocal", 1, &LogLocal);
@@ -200,7 +208,39 @@ int CUser::Init(const char *pConfFile)
     
     printf("init m_SendQueue succ, key=0x%x, size=%u\n", SendShmKey, SendShmSize);
 
+    
+    if (0 == LoaderShmKey|| 0 == LoaderShmSize)
+    {
+        printf("Error 0 == LoaderShmKey(%x) || 0 == LoaderShmSize(%d)", LoaderShmKey, LoaderShmSize);
+        return -1;
+    }
+    
+    Ret = m_LoaderQueue.Init(LoaderShmKey, LoaderShmSize);
+    if (Ret != 0)
+    {
+        printf("ERR:init m_LoaderQueue failed, key=%d, size=%d, err=%s\n",
+                LoaderShmKey, LoaderShmSize, m_LoaderQueue.GetErrMsg());
+        return -1;
+    }
+    
+    printf("init m_LoaderQueue succ, key=0x%x, size=%u\n", LoaderShmKey, LoaderShmSize);
 
+    if (0 == WriterShmKey|| 0 == WriterShmSize)
+    {
+        printf("Error 0 == WriterShmKey(%x) || 0 == WriterShmSize(%d)", WriterShmKey, WriterShmSize);
+        return -1;
+    }
+    
+    Ret = m_WriterQueue.Init(WriterShmKey, WriterShmSize);
+    if (Ret != 0)
+    {
+        printf("ERR:init m_WriterQueue failed, key=%d, size=%d, err=%s\n",
+                WriterShmKey, WriterShmSize, m_WriterQueue.GetErrMsg());
+        return -1;
+    }
+    
+    printf("init m_WriterQueue succ, key=0x%x, size=%u\n", WriterShmKey, WriterShmSize);
+    
     if(!m_pSendBuff)
     {
         m_pSendBuff = (char*)malloc(XY_PKG_MAX_LEN);
@@ -325,6 +365,8 @@ int CUser::DealPkg(const char *pCurBuffPos, int PkgLen)
             {
                 XF_LOG_WARN(0, UserID, "Register failed, Ret=%d", Ret);
             }
+
+            WriteUserInfo(Info.UserID);
 
             mm::UserRegisterRsp CurRsp;
             CurRsp.set_userid(UserID);
@@ -455,6 +497,66 @@ int CUser::SendStateMessage()
     else
     {
         XF_LOG_TRACE(0, 0, "m_SendQueue InQueue Success,[%s]", CStrTool::Str2Hex(m_pSendBuff, CurBusHeader.PkgLen));
+    }
+    
+    return 0;
+}
+
+
+
+int CUser::LoadUserInfo(uint64_t UserID, const string& strRequest)
+{
+    int Ret = 0;
+    
+    mm::LoadUserInfoReq CurReq;
+    CurReq.set_userid(UserID);
+    CurReq.set_request(strRequest);
+
+    const int BuffLen = XY_PKG_MAX_LEN;
+    char acBuff[BuffLen] = {0};
+
+    int PkgLen = CurReq.ByteSize();
+
+    if(!CurReq.SerializeToArray(acBuff, BuffLen))
+    {
+        XF_LOG_WARN(0, 0, "pack err msg failed");
+        return -1;
+    }
+    
+    Ret = m_LoaderQueue.InQueue(acBuff, PkgLen);
+    if(Ret != CShmQueue::SUCCESS)
+    {
+        XF_LOG_WARN(0, UserID, "WriteUserInfo failed, Ret=%d", Ret);
+        return -1;
+    }
+    
+    return 0;
+}
+
+
+int CUser::WriteUserInfo(uint64_t UserID)
+{
+    int Ret = 0;
+    
+    mm::WriteUserInfoReq CurReq;
+    CurReq.set_userid(UserID);
+
+    const int BuffLen = 256;
+    char acBuff[BuffLen] = {0};
+
+    int PkgLen = CurReq.ByteSize();
+
+    if(!CurReq.SerializeToArray(acBuff, BuffLen))
+    {
+        XF_LOG_WARN(0, 0, "pack err msg failed");
+        return -1;
+    }
+    
+    Ret = m_WriterQueue.InQueue(acBuff, PkgLen);
+    if(Ret != CShmQueue::SUCCESS)
+    {
+        XF_LOG_WARN(0, UserID, "WriteUserInfo failed, Ret=%d", Ret);
+        return -1;
     }
     
     return 0;

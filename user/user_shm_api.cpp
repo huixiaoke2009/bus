@@ -31,20 +31,12 @@ int CUserShmApi::Init(const char *pConfFile)
 
     int UserShmKey = 0;
     int UserShmSize = 0;
-    int LoaderShmKey = 0;
-    int LoaderShmSize = 0;
-    int WriterShmKey = 0;
-    int WriterShmSize = 0;
     char UserLockPath[256] = {0};
     
     if (IniFile.IsValid())
     {
         IniFile.GetInt("USER", "UserShmKey", 0, &UserShmKey);
         IniFile.GetInt("USER", "UserShmSize", 0, &UserShmSize);
-        IniFile.GetInt("USER", "LoaderShmKey", 0, &LoaderShmKey);
-        IniFile.GetInt("USER", "LoaderShmSize", 0, &LoaderShmSize);
-        IniFile.GetInt("USER", "WriterShmKey", 0, &WriterShmKey);
-        IniFile.GetInt("USER", "WriterShmSize", 0, &WriterShmSize);
         IniFile.GetInt("USER", "NodeNum", 0, &m_MaxUserNodeNum);
         IniFile.GetString("USER", "UserLockPath", "user.lock", UserLockPath, sizeof(UserLockPath));
     }
@@ -53,39 +45,6 @@ int CUserShmApi::Init(const char *pConfFile)
         printf("ERR:conf file [%s] is not valid\n", pConfFile);
         return -1;
     }
-
-    if (0 == LoaderShmKey|| 0 == LoaderShmSize)
-    {
-        printf("Error 0 == LoaderShmKey(%x) || 0 == LoaderShmSize(%d)", LoaderShmKey, LoaderShmSize);
-        return -1;
-    }
-    
-    Ret = m_LoaderQueue.Init(LoaderShmKey, LoaderShmSize);
-    if (Ret != 0)
-    {
-        printf("ERR:init m_LoaderQueue failed, key=%d, size=%d, err=%s\n",
-                LoaderShmKey, LoaderShmSize, m_LoaderQueue.GetErrMsg());
-        return -1;
-    }
-    
-    printf("init m_LoaderQueue succ, key=0x%x, size=%u\n", LoaderShmKey, LoaderShmSize);
-
-    if (0 == WriterShmKey|| 0 == WriterShmSize)
-    {
-        printf("Error 0 == WriterShmKey(%x) || 0 == WriterShmSize(%d)", WriterShmKey, WriterShmSize);
-        return -1;
-    }
-    
-    Ret = m_WriterQueue.Init(WriterShmKey, WriterShmSize);
-    if (Ret != 0)
-    {
-        printf("ERR:init m_WriterQueue failed, key=%d, size=%d, err=%s\n",
-                WriterShmKey, WriterShmSize, m_WriterQueue.GetErrMsg());
-        return -1;
-    }
-    
-    printf("init m_WriterQueue succ, key=0x%x, size=%u\n", WriterShmKey, WriterShmSize);
-
     
     if (UserShmKey == 0)
     {
@@ -205,8 +164,6 @@ int CUserShmApi::Register(const ShmUserInfo& Info)
         return -1;
     }
 
-    WriteUserInfo(Info.UserID);
-
     return 0;
 }
 
@@ -229,61 +186,18 @@ int CUserShmApi::RemoveUserInfo(uint64_t UserID)
     return 0;
 }
 
-int CUserShmApi::LoadUserInfo(uint64_t UserID, const string& strRequest)
+int CUserShmApi::GetUserInfo(uint64_t UserID, ShmUserInfo& Info)
 {
     int Ret = 0;
-    
-    mm::LoadUserInfoReq CurReq;
-    CurReq.set_userid(UserID);
-    CurReq.set_request(strRequest);
-
-    const int BuffLen = XY_PKG_MAX_LEN;
-    char acBuff[BuffLen] = {0};
-
-    int PkgLen = CurReq.ByteSize();
-
-    if(!CurReq.SerializeToArray(acBuff, BuffLen))
+    LOCK_USER(CFileLock::FILE_LOCK_WRITE, UserID);
+    Ret =  m_UserInfoMap.Get(UserID, Info);
+    if(Ret != 0)//内存中不存在
     {
-        XF_LOG_WARN(0, 0, "pack err msg failed");
+        XF_LOG_WARN(0, UserID, "user is not exist");
         return -1;
     }
-    
-    Ret = m_LoaderQueue.InQueue(acBuff, PkgLen);
-    if(Ret != CShmQueue::SUCCESS)
-    {
-        XF_LOG_WARN(0, UserID, "WriteUserInfo failed, Ret=%d", Ret);
-        return -1;
-    }
-    
+
     return 0;
 }
 
-
-int CUserShmApi::WriteUserInfo(uint64_t UserID)
-{
-    int Ret = 0;
-    
-    mm::WriteUserInfoReq CurReq;
-    CurReq.set_userid(UserID);
-
-    const int BuffLen = 256;
-    char acBuff[BuffLen] = {0};
-
-    int PkgLen = CurReq.ByteSize();
-
-    if(!CurReq.SerializeToArray(acBuff, BuffLen))
-    {
-        XF_LOG_WARN(0, 0, "pack err msg failed");
-        return -1;
-    }
-    
-    Ret = m_WriterQueue.InQueue(acBuff, PkgLen);
-    if(Ret != CShmQueue::SUCCESS)
-    {
-        XF_LOG_WARN(0, UserID, "WriteUserInfo failed, Ret=%d", Ret);
-        return -1;
-    }
-    
-    return 0;
-}
 

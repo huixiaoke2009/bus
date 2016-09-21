@@ -13,7 +13,7 @@
 
 
 
-typedef struct tagMysqlConfig
+typedef struct tagAuthDBConfig
 {
     char Host[32];
     int Port;
@@ -21,7 +21,12 @@ typedef struct tagMysqlConfig
     char Pass[256];
     char DBName[256];
     char TableName[256];
-}MysqlConfig;
+
+    tagAuthDBConfig()
+    {
+        memset(this, 0x0, sizeof(tagAuthDBConfig));
+    }
+}AuthDBConfig;
 
 class CAuth
 {
@@ -44,9 +49,8 @@ class CAuth
         unsigned int m_ServerID;
         int m_StateTime;
 
-        // ???????????????
-        MysqlConfig m_DBConfig[DATABASE_NUM];
-        mmlib::CMySQL m_DBConn[DATABASE_NUM];
+        AuthDBConfig m_DBConfig[AUTH_DATABASE_NUM];
+        mmlib::CMySQL m_DBConn[AUTH_DATABASE_NUM];
         
         mmlib::CShmQueue m_SendQueue;
         mmlib::CShmQueue m_RecvQueue;
