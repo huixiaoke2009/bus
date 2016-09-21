@@ -60,8 +60,8 @@ int CLoaderUser::Init(const char* pConfFile)
     int Ret = 0;
 
     int ProcNum = 0;
-    int WriterShmKey = 0;
-    int WriterShmSize = 0;
+    int LoaderShmKey = 0;
+    int LoaderShmSize = 0;
     int LogLocal = 0;
     char ModuleName[32] = {0};
     int LogLevel = 3;
@@ -74,16 +74,16 @@ int CLoaderUser::Init(const char* pConfFile)
     if (CurConf.IsValid())
     {
         //读取配置信息
-        CurConf.GetInt("WRITER", "ProcNum", 1, &ProcNum);
-        CurConf.GetInt("WRITER", "WriterShmKey", 0, &WriterShmKey);
-        CurConf.GetInt("WRITER", "WriterShmSize", 0, &WriterShmSize);
-        CurConf.GetString("WRITER", "DBConfPath", "", DBConfPath, sizeof(DBConfPath));
-        CurConf.GetString("WRITER", "UserConfPath", "", UserConfPath, sizeof(UserConfPath));
+        CurConf.GetInt("LOADER", "ProcNum", 1, &ProcNum);
+        CurConf.GetInt("LOADER", "LoaderShmKey", 0, &LoaderShmKey);
+        CurConf.GetInt("LOADER", "LoaderShmSize", 0, &LoaderShmSize);
+        CurConf.GetString("LOADER", "DBConfPath", "", DBConfPath, sizeof(DBConfPath));
+        CurConf.GetString("LOADER", "UserConfPath", "", UserConfPath, sizeof(UserConfPath));
         
-        CurConf.GetInt("WRITER", "LogLocal", 0, &LogLocal);
-        CurConf.GetString("WRITER", "ModuleName", "writer", ModuleName, sizeof(ModuleName));
-        CurConf.GetInt("WRITER", "LogLevel", 3, &LogLevel);
-        CurConf.GetString("WRITER", "LogPath", "log", LogPath, sizeof(LogPath));
+        CurConf.GetInt("LOADER", "LogLocal", 0, &LogLocal);
+        CurConf.GetString("LOADER", "ModuleName", "loader", ModuleName, sizeof(ModuleName));
+        CurConf.GetInt("LOADER", "LogLevel", 3, &LogLevel);
+        CurConf.GetString("LOADER", "LogPath", "log", LogPath, sizeof(LogPath));
     }
     else
     {
@@ -97,22 +97,22 @@ int CLoaderUser::Init(const char* pConfFile)
         return -1;
     }
     
-    if (WriterShmKey == 0)
+    if (LoaderShmKey == 0)
     {
-        printf("conf WRITER/WriterShmKey[%d] is not valid\n", WriterShmKey);
+        printf("conf LOADER/LoaderShmKey[%d] is not valid\n", LoaderShmKey);
         return -1;
     }
 
-    if (WriterShmSize == 0)
+    if (LoaderShmSize == 0)
     {
-        printf("conf WRITER/WriterShmSize[%d] is not valid\n", WriterShmSize);
+        printf("conf LOADER/LoaderShmSize[%d] is not valid\n", LoaderShmSize);
         return -1;
     }
 
-    Ret = m_WriterQueue.Init(WriterShmKey, WriterShmSize);
+    Ret = m_LoaderQueue.Init(LoaderShmKey, LoaderShmSize);
     if (Ret != 0)
     {
-        printf("init m_WriterQueue[%d/%d] failed, Ret=%d\n", WriterShmKey, WriterShmSize, Ret);
+        printf("init m_LoaderQueue[%d/%d] failed, Ret=%d\n", LoaderShmKey, LoaderShmSize, Ret);
         return -1;
     }
 
@@ -188,14 +188,14 @@ int CLoaderUser::Entity(int argc, char *argv[])
 
         char RecvBuff[128] = {0};
         int RecvLen = sizeof(RecvBuff);
-        Ret = m_WriterQueue.OutQueue(RecvBuff, &RecvLen);
-        if (Ret == m_WriterQueue.E_SHM_QUEUE_EMPTY)
+        Ret = m_LoaderQueue.OutQueue(RecvBuff, &RecvLen);
+        if (Ret == m_LoaderQueue.E_SHM_QUEUE_EMPTY)
         {
             EmptyFlag = 1;
         }
-        else if (Ret != m_WriterQueue.SUCCESS)
+        else if (Ret != m_LoaderQueue.SUCCESS)
         {
-            XF_LOG_WARN(0, 0, "m_WriterQueue out failed, ret=%d", Ret);
+            XF_LOG_WARN(0, 0, "m_LoaderQueue out failed, ret=%d", Ret);
             EmptyFlag = 1;    //为了防止死循环输出日志
         }
         else

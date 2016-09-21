@@ -24,7 +24,7 @@ private:
     DBConfig m_DBConfig[USER_DATABASE_NUM];
     mmlib::CMySQL m_DBConn[USER_DATABASE_NUM];
     
-    mmlib::CShmQueue m_WriterQueue;
+    mmlib::CShmQueue m_LoaderQueue;
     CUserShmApi m_UserShm;
 };
 
