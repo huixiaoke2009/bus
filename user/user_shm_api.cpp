@@ -147,7 +147,7 @@ int CUserShmApi::Init(const char *pConfFile)
     return 0;
 }
 
-int CUserShmApi::Register(const ShmUserInfo& Info)
+int CUserShmApi::InsertUserInfo(const ShmUserInfo& Info)
 {
     if(Info.UserID == 0)
     {
@@ -198,6 +198,15 @@ int CUserShmApi::GetUserInfo(uint64_t UserID, ShmUserInfo& Info)
     }
 
     return 0;
+}
+
+
+int CUserShmApi::UpdateUserInfo(const ShmUserInfo &newUserInfo)
+{
+    int Ret = 0;
+    LOCK_USER(CFileLock::FILE_LOCK_WRITE, newUserInfo.UserID);
+    Ret = m_UserInfoMap.Update(newUserInfo.UserID, newUserInfo);
+    return Ret;
 }
 
 

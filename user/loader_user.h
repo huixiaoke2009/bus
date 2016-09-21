@@ -10,18 +10,16 @@
 #include "user_shm_api.h"
 #include "process_manager/process_manager.h"
 
-class CWriterUser: public mmlib::CProcessManager
+class CLoaderUser: public mmlib::CProcessManager
 {
 
 public:
-    CWriterUser();
-    ~CWriterUser();
+    CLoaderUser();
+    ~CLoaderUser();
     int Init(const char* pConfFile);
     int Entity(int argc, char *argv[]);
-    int Struct2ProtoStringUser(const ShmUserInfo &CurUserInfo,std::string &strProto, uint64_t UserID);
-    int CheckUserInfoValid(uint64_t UserID, const ShmUserInfo &CurUserInfo);
-    int ProcessWriterUserInfo(uint64_t UserID);
-
+    int ProcessLoaderUserInfo(uint64_t UserID, const std::string& strRequest);
+    int UserProtoString2Struct(ShmUserInfo &CurUserInfo, const std::string &strProto);
 private:
     DBConfig m_DBConfig[USER_DATABASE_NUM];
     mmlib::CMySQL m_DBConn[USER_DATABASE_NUM];

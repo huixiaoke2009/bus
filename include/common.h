@@ -74,4 +74,20 @@ enum
     USER_STATUS_LOADED  = 2,
 };
 
+typedef struct tagDBConfig
+{
+    char Host[32];
+    int Port;
+    char User[256];
+    char Pass[256];
+    char DBName[256];
+    char TableName[256];
+
+    tagDBConfig()
+    {
+        memset(this, 0x0, sizeof(tagDBConfig));
+    }
+}DBConfig;
+
+
 #endif

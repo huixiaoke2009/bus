@@ -176,7 +176,7 @@ message LoadUserInfoReq
 
 message LoadUserInfoRsp
 {
-    required uint64 userid = 1;
+    required int32 ret = 1;
     optional bytes request = 2;
 }
 

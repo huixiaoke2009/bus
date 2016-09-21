@@ -79,10 +79,10 @@ class CUserShmApi
         ~CUserShmApi();
 
         int Init(const char *pConfFile);
-        int Register(const ShmUserInfo& Info);
+        int InsertUserInfo(const ShmUserInfo& Info);
         int RemoveUserInfo(uint64_t UserID);
         int GetUserInfo(uint64_t UserID, ShmUserInfo& Info);
-        
+        int UpdateUserInfo(const ShmUserInfo &newUserInfo);
    private:
 
         mmlib::CFileLock m_UserInfoLock;

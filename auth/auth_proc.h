@@ -12,22 +12,6 @@
 #include "header.h"
 
 
-
-typedef struct tagAuthDBConfig
-{
-    char Host[32];
-    int Port;
-    char User[256];
-    char Pass[256];
-    char DBName[256];
-    char TableName[256];
-
-    tagAuthDBConfig()
-    {
-        memset(this, 0x0, sizeof(tagAuthDBConfig));
-    }
-}AuthDBConfig;
-
 class CAuth
 {
     public:
@@ -49,7 +33,7 @@ class CAuth
         unsigned int m_ServerID;
         int m_StateTime;
 
-        AuthDBConfig m_DBConfig[AUTH_DATABASE_NUM];
+        DBConfig m_DBConfig[AUTH_DATABASE_NUM];
         mmlib::CMySQL m_DBConn[AUTH_DATABASE_NUM];
         
         mmlib::CShmQueue m_SendQueue;

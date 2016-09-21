@@ -360,7 +360,7 @@ int CUser::DealPkg(const char *pCurBuffPos, int PkgLen)
             snprintf(Info.Address, MAX_ADDR_LENGTH, "%s", strAddress.c_str());
             snprintf(Info.EMail, MAX_EMAIL_LENGTH, "%s", strEmail.c_str());
 
-            Ret = m_UserShm.Register(Info);
+            Ret = m_UserShm.InsertUserInfo(Info);
             if(Ret != 0)
             {
                 XF_LOG_WARN(0, UserID, "Register failed, Ret=%d", Ret);
