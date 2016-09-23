@@ -451,8 +451,8 @@ int CAuth::Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, ch
 /* 0 验证通过  1 系统错误  2 密码错误或用户不存在 */
 int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd, int Plat)
 {
-    int DBIndex = UserID%AUTH_DATABASE_NUM;
-    int TableIndex = (UserID>>1)%AUTH_TABLE_NUM;
+    int DBIndex = GetUserDBIndex(UserID);
+    int TableIndex = GetUserTableIndex(UserID);
     
     char SqlStr[1024] = {0};
     int RecNum = 0;
@@ -498,8 +498,9 @@ int CAuth::LoginCheck(uint64_t UserID, const string& strPasswd, int Plat)
 int CAuth::Register(const std::string& strPasswd, uint64_t& UserID)
 {
     UserID = time(NULL);  // 这里还没想好方案，先这样子吧
-    int DBIndex = UserID%AUTH_DATABASE_NUM;
-    int TableIndex = (UserID>>1)%AUTH_TABLE_NUM;
+    
+    int DBIndex = GetUserDBIndex(UserID);
+    int TableIndex = GetUserTableIndex(UserID);
     
     char SqlStr[1024] = {0};
     int SqlLen = snprintf(SqlStr, sizeof(SqlStr), "insert into %s.%s_%d (userid, passwd) values (%lu, '%s')", m_DBConfig[DBIndex].DBName, m_DBConfig[DBIndex].TableName, TableIndex, UserID, strPasswd.c_str());

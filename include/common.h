@@ -16,7 +16,7 @@ const int MAX_PERSONAL_NOTE_LENGTH = 256;   // 个人描述长度
 const int MAX_TELNO_LENGTH = 11;
 const int MAX_ADDR_LENGTH = 256;
 const int MAX_EMAIL_LENGTH = 64;
-const int MAX_USER_SERVER_NUM = 1;  // user服务器数量，决定某个userid去哪台服务器处理
+const int MAX_USER_SERVER_NUM = 2;  // user服务器数量，决定某个userid去哪台服务器处理
 const int USER_DATABASE_NUM = 2;
 const int USER_TABLE_NUM = 2;
 
@@ -93,7 +93,7 @@ typedef struct tagDBConfig
 /********************* 下面是一些公用函数 **************************/
 inline int GetUserServer(uint64_t UserID)
 {
-    return SERVER_USER_BEGIN + UserID % MAX_USER_SERVER_NUM + 1;
+    return SERVER_USER_BEGIN + (UserID/100) % MAX_USER_SERVER_NUM + 1;
 }
 
 
@@ -104,7 +104,7 @@ inline int GetUserDBIndex(uint64_t UserID)
 
 inline int GetUserTableIndex(uint64_t UserID)
 {
-    return (UserID>>1) % USER_TABLE_NUM;
+    return (UserID/10) % USER_TABLE_NUM;
 }
 
 #endif
