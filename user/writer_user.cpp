@@ -186,9 +186,9 @@ int CWriterUser::Entity(int argc, char *argv[])
     {
         EmptyFlag = 0;
 
-        char RecvBuff[128] = {0};
-        int RecvLen = sizeof(RecvBuff);
-        Ret = m_WriterQueue.OutQueue(RecvBuff, &RecvLen);
+        char pRecvBuff[128] = {0};
+        int RecvLen = sizeof(pRecvBuff);
+        Ret = m_WriterQueue.OutQueue(pRecvBuff, &RecvLen);
         if (Ret == m_WriterQueue.E_SHM_QUEUE_EMPTY)
         {
             EmptyFlag = 1;
@@ -201,7 +201,7 @@ int CWriterUser::Entity(int argc, char *argv[])
         else
         {
             mm::WriteUserInfoReq CurReq;
-            if(!CurReq.ParseFromArray(RecvBuff, RecvLen))
+            if(!CurReq.ParseFromArray(pRecvBuff, RecvLen))
             {
                 XF_LOG_WARN(0, 0, "pkg parse failed");
                 return -1;
@@ -281,8 +281,8 @@ int CWriterUser::ProcessWriterUserInfo(uint64_t UserID)
         return -1;
     }
 
-    int DBIndex = UserID % USER_DATABASE_NUM;
-    int TableIndex = (UserID>>1) % USER_TABLE_NUM;
+    int DBIndex = GetUserDBIndex(UserID);
+    int TableIndex = GetUserTableIndex(UserID);
 
     //有效状态才回写
     string strProto;

@@ -106,8 +106,10 @@ int CUser::Init(const char *pConfFile)
     int LogLevel = 0;
     char LogPath[1024] = {0};
 
-    int LoaderShmKey = 0;
-    int LoaderShmSize = 0;
+    int LoaderSendShmKey = 0;
+    int LoaderSendShmSize = 0;
+    int LoaderRecvShmKey = 0;
+    int LoaderRecvShmSize = 0;
     int WriterShmKey = 0;
     int WriterShmSize = 0;
     char BusConfPath[256] = {0};
@@ -117,8 +119,10 @@ int CUser::Init(const char *pConfFile)
         IniFile.GetInt("USER", "ServerID", 0, (int*)&m_ServerID);
         IniFile.GetString("USER", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
         IniFile.GetInt("USER", "StateTime", 0, &m_StateTime);
-        IniFile.GetInt("USER", "LoaderShmKey", 0, &LoaderShmKey);
-        IniFile.GetInt("USER", "LoaderShmSize", 0, &LoaderShmSize);
+        IniFile.GetInt("USER", "LoaderSendShmKey", 0, &LoaderSendShmKey);
+        IniFile.GetInt("USER", "LoaderSendShmSize", 0, &LoaderSendShmSize);
+        IniFile.GetInt("USER", "LoaderRecvShmKey", 0, &LoaderRecvShmKey);
+        IniFile.GetInt("USER", "LoaderRecvShmSize", 0, &LoaderRecvShmSize);
         IniFile.GetInt("USER", "WriterShmKey", 0, &WriterShmKey);
         IniFile.GetInt("USER", "WriterShmSize", 0, &WriterShmSize);
         
@@ -209,21 +213,37 @@ int CUser::Init(const char *pConfFile)
     printf("init m_SendQueue succ, key=0x%x, size=%u\n", SendShmKey, SendShmSize);
 
     
-    if (0 == LoaderShmKey|| 0 == LoaderShmSize)
+    if (0 == LoaderSendShmKey || 0 == LoaderSendShmSize)
     {
-        printf("Error 0 == LoaderShmKey(%x) || 0 == LoaderShmSize(%d)", LoaderShmKey, LoaderShmSize);
+        printf("Error 0 == LoaderSendShmKey(%x) || 0 == LoaderSendShmSize(%d)", LoaderSendShmKey, LoaderSendShmSize);
         return -1;
     }
     
-    Ret = m_LoaderQueue.Init(LoaderShmKey, LoaderShmSize);
+    Ret = m_LoaderSendQueue.Init(LoaderSendShmKey, LoaderSendShmSize);
     if (Ret != 0)
     {
-        printf("ERR:init m_LoaderQueue failed, key=%d, size=%d, err=%s\n",
-                LoaderShmKey, LoaderShmSize, m_LoaderQueue.GetErrMsg());
+        printf("ERR:init m_LoaderSendQueue failed, key=%d, size=%d, err=%s\n",
+                LoaderSendShmKey, LoaderSendShmSize, m_LoaderSendQueue.GetErrMsg());
         return -1;
     }
     
-    printf("init m_LoaderQueue succ, key=0x%x, size=%u\n", LoaderShmKey, LoaderShmSize);
+    printf("init m_LoaderSendQueue succ, key=0x%x, size=%u\n", LoaderSendShmKey, LoaderSendShmSize);
+
+    if (0 == LoaderRecvShmKey || 0 == LoaderRecvShmSize)
+    {
+        printf("Error 0 == LoaderRecvShmKey(%x) || 0 == LoaderRecvShmSize(%d)", LoaderRecvShmKey, LoaderRecvShmSize);
+        return -1;
+    }
+
+    Ret = m_LoaderRecvQueue.Init(LoaderRecvShmKey, LoaderRecvShmSize);
+    if (Ret != 0)
+    {
+        printf("ERR:init m_LoaderRecvQueue failed, key=%d, size=%d, err=%s\n",
+                LoaderRecvShmKey, LoaderRecvShmSize, m_LoaderRecvQueue.GetErrMsg());
+        return -1;
+    }
+    
+    printf("init m_LoaderRecvQueue succ, key=0x%x, size=%u\n", LoaderRecvShmKey, LoaderRecvShmSize);
 
     if (0 == WriterShmKey|| 0 == WriterShmSize)
     {
@@ -304,6 +324,49 @@ int CUser::Run()
             }
         }
 
+        // 从loader收包
+        RecvLen = XY_PKG_MAX_LEN;
+        Ret = m_LoaderRecvQueue.OutQueue(pRecvBuff, &RecvLen);
+        if (Ret == m_LoaderRecvQueue.E_SHM_QUEUE_EMPTY)
+        {
+            
+        }
+        else if(Ret != 0)
+        {
+             //出错了
+             XF_LOG_WARN(0, 0, "Run|OutQueue failed, ret=%d, errmsg=%s", Ret, m_LoaderRecvQueue.GetErrMsg());
+             continue;
+        }
+        else
+        {
+            EmptyFlag = 0;
+            
+            XF_LOG_TRACE(0, 0, "Run|OutQueue success|%d|%s", RecvLen, CStrTool::Str2Hex(pRecvBuff, RecvLen));
+
+            mm::LoadUserInfoRsp CurRsp;
+            if(!CurRsp.ParseFromArray(pRecvBuff, RecvLen))
+            {
+                XF_LOG_WARN(0, 0, "pkg parse failed");
+                continue;
+            }
+
+            int Result = CurRsp.ret();
+            string strRequest = CurRsp.request();
+
+            if(Result != 0)
+            {
+                XF_LOG_WARN(0, 0, "Load UserInfo failed, Ret=%d", Result);
+                continue;
+            }
+            
+            Ret = DealPkg(strRequest.c_str(), strRequest.size());
+            if(Ret != 0)
+            {
+                XF_LOG_WARN(0, 0, "Run|DealPkg failed, Ret=%d", Ret);
+                continue;
+            }
+        }
+
         // 向bus更新自己的状态
         time_t NowTime = time(NULL);
         if(NowTime - LastStateTime >= m_StateTime)
@@ -329,15 +392,18 @@ int CUser::DealPkg(const char *pCurBuffPos, int PkgLen)
     XYHeaderIn HeaderIn;
     HeaderIn.Read(pCurBuffPos);
     int HeaderInLen = HeaderIn.GetHeaderLen();
+
+    uint64_t UserID = HeaderIn.UserID;
+    unsigned int CmdID = HeaderIn.CmdID;
     
-    switch(HeaderIn.CmdID)
+    switch(CmdID)
     {
         case Cmd_User_Register_Req:
         {
             mm::UserRegisterReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", HeaderIn.CmdID);
+                XF_LOG_WARN(0, UserID, "pkg parse failed, cmdid=%0x", CmdID);
                 return -1;
             }
 
@@ -390,13 +456,129 @@ int CUser::DealPkg(const char *pCurBuffPos, int PkgLen)
             app::AddFriendReq CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
             {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", HeaderIn.CmdID);
+                XF_LOG_WARN(0, UserID, "pkg parse failed, cmdid=%0x", CmdID);
                 return -1;
+            }
+
+            // 加载自己的数据
+            Ret = LoadUserInfoWhileNotExist(UserID, string(pCurBuffPos, PkgLen));
+            if(Ret == 1)
+            {
+                return 0;
+            }
+            else if(Ret != 0)
+            {
+                XF_LOG_WARN(0, UserID, "LoadUserInfoWhileNotExist failed, Ret=%d", Ret);
+                return -1;
+            }
+
+            // 这里没有加锁有可能是拿不到的,但运气不会那么背
+            ShmUserInfo CurUserInfo;
+            Ret = m_UserShm.GetUserInfo(UserID, CurUserInfo);
+            if(Ret != 0)
+            {
+                XF_LOG_WARN(0, UserID, "user not exist");
+                return -1;
+            }
+
+            string strNickName(CurUserInfo.NickName);
+
+            uint64_t OtherUserID = CurReq.userid();
+
+            // 如果要加的好友也是这台服务器的,则内部处理,否则传到其它server处理
+            int ServerID = GetUserServer(OtherUserID);
+            if(ServerID == GetServerID())
+            {
+                // 加载该好友信息
+                Ret = LoadUserInfoWhileNotExist(OtherUserID, string(pCurBuffPos, PkgLen));
+                if(Ret == 1)
+                {
+                    return 0;
+                }
+                else if(Ret != 0)
+                {
+                    XF_LOG_WARN(0, UserID, "LoadUserInfoWhileNotExist failed, Ret=%d", Ret);
+                    return -1;
+                }
+
+                Ret = m_UserShm.AddFriendReq(UserID, OtherUserID, strNickName);
+                if(Ret != 0)
+                {
+                   XF_LOG_WARN(0, UserID, "m_UserShm AddFriendReq failed, Ret=%d", Ret);
+                   return -1;
+                }
+
+                app::AddFriendRsp CurRsp;
+                CurRsp.set_ret(0);
+                
+                XYHeaderIn Header;
+                Header.SrcID = GetServerID();
+                Header.CmdID = Cmd_User_AddFriend_Rsp;
+                Header.SN = HeaderIn.SN;
+                Header.ConnPos = HeaderIn.ConnPos;
+                Header.UserID = HeaderIn.UserID;
+                Header.PkgTime = time(NULL);
+                Header.Ret = 0;
+                
+                Send2Server(Header, HeaderIn.SrcID, TO_SRV, 0, CurRsp);
+            }
+            else
+            {
+                mm::UserAddFriendReq CurReq2;
+                CurReq2.set_userid(UserID);
+                CurReq2.set_nickname(CurUserInfo.NickName);
+                CurReq2.set_otheruserid(OtherUserID);
+
+                // 响应也让对方server去回,这里要带上连接要素
+                XYHeaderIn Header;
+                Header.SrcID = HeaderIn.SrcID;
+                Header.CmdID = Cmd_User_AddFriend_Req2;
+                Header.SN = HeaderIn.SN;
+                Header.ConnPos = HeaderIn.ConnPos;
+                Header.UserID = HeaderIn.UserID;
+                Header.PkgTime = time(NULL);
+                Header.Ret = 0;
+                
+                Send2Server(Header, ServerID, TO_SRV, 0, CurReq2);
+            }
+
+            break;
+        }
+        case Cmd_User_AddFriend_Req2:
+        {
+            mm::UserAddFriendReq CurReq;
+            if(!CurReq.ParseFromArray(pCurBuffPos+HeaderInLen, PkgLen-HeaderInLen))
+            {
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", CmdID);
+                return -1;
+            }
+
+            uint64_t UserID1 = CurReq.userid();
+            string strNickName = CurReq.nickname();
+            uint64_t UserID2 = CurReq.otheruserid();
+
+            // 加载自己的数据
+            Ret = LoadUserInfoWhileNotExist(UserID2, string(pCurBuffPos, PkgLen));
+            if(Ret == 1)
+            {
+                return 0;
+            }
+            else if(Ret != 0)
+            {
+                XF_LOG_WARN(0, UserID2, "LoadUserInfoWhileNotExist failed, Ret=%d", Ret);
+                return -1;
+            }
+
+            Ret = m_UserShm.AddFriendReq(UserID1, UserID2, strNickName);
+            if(Ret != 0)
+            {
+               XF_LOG_WARN(0, UserID2, "m_UserShm AddFriendReq failed, Ret=%d", Ret);
+               return -1;
             }
 
             app::AddFriendRsp CurRsp;
             CurRsp.set_ret(0);
-
+            
             XYHeaderIn Header;
             Header.SrcID = GetServerID();
             Header.CmdID = Cmd_User_AddFriend_Rsp;
@@ -407,7 +589,7 @@ int CUser::DealPkg(const char *pCurBuffPos, int PkgLen)
             Header.Ret = 0;
             
             Send2Server(Header, HeaderIn.SrcID, TO_SRV, 0, CurRsp);
-            
+
             break;
         }
         default:
@@ -523,13 +705,36 @@ int CUser::LoadUserInfo(uint64_t UserID, const string& strRequest)
         return -1;
     }
     
-    Ret = m_LoaderQueue.InQueue(acBuff, PkgLen);
+    Ret = m_LoaderSendQueue.InQueue(acBuff, PkgLen);
     if(Ret != CShmQueue::SUCCESS)
     {
-        XF_LOG_WARN(0, UserID, "WriteUserInfo failed, Ret=%d", Ret);
+        XF_LOG_WARN(0, UserID, "m_LoaderSendQueue InQueue failed, Ret=%d", Ret);
         return -1;
     }
+
+    XF_LOG_DEBUG(0, UserID, "UserID = %ld now Loading...", UserID);
     
+    return 0;
+}
+
+
+// 0表示用户存在,可以往下跑  1表示用户不在内存,正在加载  其它表示异常
+int CUser::LoadUserInfoWhileNotExist(uint64_t UserID, const string& strRequest)
+{
+    int Ret = 0;
+    ShmUserInfo Info;
+    Ret = m_UserShm.GetUserInfo(UserID, Info);
+    if(Ret != 0)
+    {
+        Ret = LoadUserInfo(UserID, strRequest);
+        if(Ret != 0)
+        {
+            return -1;
+        }
+
+        return 1;
+    }
+
     return 0;
 }
 

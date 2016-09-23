@@ -159,12 +159,10 @@ message UserRegisterRsp
 message UserAddFriendReq
 {
     required uint64 userid = 1;
+    required string nickname = 2;
+    required uint64 otheruserid = 3;
 }
 
-message UserAddFriendRsp
-{
-
-}
 
 /********************* LOAD WRITE部分 **********************/
 //加载用户信息

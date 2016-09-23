@@ -21,7 +21,7 @@ const int USER_DATABASE_NUM = 2;
 const int USER_TABLE_NUM = 2;
 
 // auth常量
-const int AUTH_DATABASE_NUM = 4;    // auth分库分表的库数量
+const int AUTH_DATABASE_NUM = 2;    // auth分库分表的库数量
 const int AUTH_TABLE_NUM = 2;            // auth分库分表的表数量
 
 // 服务器与组
@@ -42,7 +42,7 @@ const unsigned int CMD_PREFIX_USER = 0x0004;
 
 
 
-/********************* 下面是一些enum结构 **************************/
+/********************* 下面是一些公用结构 **************************/
 
 //连接类型：未认证，认证，webpcl
 enum
@@ -89,5 +89,22 @@ typedef struct tagDBConfig
     }
 }DBConfig;
 
+
+/********************* 下面是一些公用函数 **************************/
+inline int GetUserServer(uint64_t UserID)
+{
+    return SERVER_USER_BEGIN + UserID % MAX_USER_SERVER_NUM + 1;
+}
+
+
+inline int GetUserDBIndex(uint64_t UserID)
+{
+    return UserID % USER_DATABASE_NUM;
+}
+
+inline int GetUserTableIndex(uint64_t UserID)
+{
+    return (UserID>>1) % USER_TABLE_NUM;
+}
 
 #endif

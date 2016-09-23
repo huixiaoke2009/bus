@@ -83,6 +83,9 @@ class CUserShmApi
         int RemoveUserInfo(uint64_t UserID);
         int GetUserInfo(uint64_t UserID, ShmUserInfo& Info);
         int UpdateUserInfo(const ShmUserInfo &newUserInfo);
+
+        int AddFriendReq(uint64_t UserID, uint64_t OtherUserID, const std::string& strNickName);
+            
    private:
 
         mmlib::CFileLock m_UserInfoLock;

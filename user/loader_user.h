@@ -1,6 +1,6 @@
 
-#ifndef _WRITER_USER_H_
-#define _WRITER_USER_H_
+#ifndef _LOADER_USER_H_
+#define _LOADER_USER_H_
 
 #include <stdint.h>
 #include <string>
@@ -24,7 +24,9 @@ private:
     DBConfig m_DBConfig[USER_DATABASE_NUM];
     mmlib::CMySQL m_DBConn[USER_DATABASE_NUM];
     
-    mmlib::CShmQueue m_LoaderQueue;
+    mmlib::CShmQueue m_LoaderRecvQueue;
+    mmlib::CShmQueue m_LoaderSendQueue;
+    
     CUserShmApi m_UserShm;
 };
 

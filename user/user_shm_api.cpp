@@ -149,7 +149,9 @@ int CUserShmApi::Init(const char *pConfFile)
 
 int CUserShmApi::InsertUserInfo(const ShmUserInfo& Info)
 {
-    if(Info.UserID == 0)
+    uint64_t UserID = Info.UserID;
+    
+    if(UserID == 0)
     {
         XF_LOG_WARN(0, 0, "UserID == 0 is illegal");
         return -1;
@@ -157,12 +159,15 @@ int CUserShmApi::InsertUserInfo(const ShmUserInfo& Info)
     
     int Ret = 0;
     LOCK_HASHLIST_HEAD(CFileLock::FILE_LOCK_WRITE);
-    Ret = m_UserInfoMap.Insert(Info.UserID, Info);
+    LOCK_USER(CFileLock::FILE_LOCK_WRITE, UserID);
+    Ret = m_UserInfoMap.Insert(UserID, Info);
     if(Ret != 0)
     {
-        XF_LOG_WARN(0, Info.UserID, "Insert failed, Ret=%d", Ret);
+        XF_LOG_WARN(0, UserID, "Insert failed, Ret=%d", Ret);
         return -1;
     }
+
+    XF_LOG_INFO(0, UserID, "UserID = %lu Insert success", UserID);
 
     return 0;
 }
@@ -174,14 +179,14 @@ int CUserShmApi::RemoveUserInfo(uint64_t UserID)
     LOCK_HASHLIST_HEAD(CFileLock::FILE_LOCK_WRITE);
     LOCK_USER(CFileLock::FILE_LOCK_WRITE, UserID);
 
-    XF_LOG_INFO(0, UserID, "UserID = %lu Remove", UserID);
-
     Ret = m_UserInfoMap.Remove(UserID);
     if(Ret != 0)
     {
         XF_LOG_WARN(0, UserID, "Remove failed, Ret=%d", Ret);
         return -1;
     }
+
+    XF_LOG_INFO(0, UserID, "UserID = %lu Remove success", UserID);
 
     return 0;
 }
@@ -193,7 +198,6 @@ int CUserShmApi::GetUserInfo(uint64_t UserID, ShmUserInfo& Info)
     Ret =  m_UserInfoMap.Get(UserID, Info);
     if(Ret != 0)//内存中不存在
     {
-        XF_LOG_WARN(0, UserID, "user is not exist");
         return -1;
     }
 
@@ -203,10 +207,26 @@ int CUserShmApi::GetUserInfo(uint64_t UserID, ShmUserInfo& Info)
 
 int CUserShmApi::UpdateUserInfo(const ShmUserInfo &newUserInfo)
 {
+    uint64_t UserID = newUserInfo.UserID;
+    
     int Ret = 0;
-    LOCK_USER(CFileLock::FILE_LOCK_WRITE, newUserInfo.UserID);
-    Ret = m_UserInfoMap.Update(newUserInfo.UserID, newUserInfo);
-    return Ret;
+    LOCK_USER(CFileLock::FILE_LOCK_WRITE, UserID);
+    Ret = m_UserInfoMap.Update(UserID, newUserInfo);
+    if(Ret != 0)
+    {
+        XF_LOG_WARN(0, UserID, "Update failed, Ret=%d", Ret);
+        return -1;
+    }
+
+    XF_LOG_INFO(0, UserID, "UserID = %lu Update success", UserID);
+    
+    return 0;
 }
 
+
+
+int CUserShmApi::AddFriendReq(uint64_t UserID, uint64_t OtherUserID, const string& strNickName)
+{
+    return 0;
+}
 

@@ -60,8 +60,10 @@ int CLoaderUser::Init(const char* pConfFile)
     int Ret = 0;
 
     int ProcNum = 0;
-    int LoaderShmKey = 0;
-    int LoaderShmSize = 0;
+    int LoaderRecvShmKey = 0;
+    int LoaderRecvShmSize = 0;
+    int LoaderSendShmKey = 0;
+    int LoaderSendShmSize = 0;
     int LogLocal = 0;
     char ModuleName[32] = {0};
     int LogLevel = 3;
@@ -75,8 +77,10 @@ int CLoaderUser::Init(const char* pConfFile)
     {
         //读取配置信息
         CurConf.GetInt("LOADER", "ProcNum", 1, &ProcNum);
-        CurConf.GetInt("LOADER", "LoaderShmKey", 0, &LoaderShmKey);
-        CurConf.GetInt("LOADER", "LoaderShmSize", 0, &LoaderShmSize);
+        CurConf.GetInt("LOADER", "LoaderRecvShmKey", 0, &LoaderRecvShmKey);
+        CurConf.GetInt("LOADER", "LoaderRecvShmSize", 0, &LoaderRecvShmSize);
+        CurConf.GetInt("LOADER", "LoaderSendShmKey", 0, &LoaderSendShmKey);
+        CurConf.GetInt("LOADER", "LoaderSendShmSize", 0, &LoaderSendShmSize);
         CurConf.GetString("LOADER", "DBConfPath", "", DBConfPath, sizeof(DBConfPath));
         CurConf.GetString("LOADER", "UserConfPath", "", UserConfPath, sizeof(UserConfPath));
         
@@ -97,25 +101,44 @@ int CLoaderUser::Init(const char* pConfFile)
         return -1;
     }
     
-    if (LoaderShmKey == 0)
+    if (LoaderRecvShmKey == 0)
     {
-        printf("conf LOADER/LoaderShmKey[%d] is not valid\n", LoaderShmKey);
+        printf("conf LOADER/LoaderRecvShmKey[%d] is not valid\n", LoaderRecvShmKey);
         return -1;
     }
 
-    if (LoaderShmSize == 0)
+    if (LoaderRecvShmSize == 0)
     {
-        printf("conf LOADER/LoaderShmSize[%d] is not valid\n", LoaderShmSize);
+        printf("conf LOADER/LoaderRecvShmSize[%d] is not valid\n", LoaderRecvShmSize);
         return -1;
     }
 
-    Ret = m_LoaderQueue.Init(LoaderShmKey, LoaderShmSize);
+    Ret = m_LoaderRecvQueue.Init(LoaderRecvShmKey, LoaderRecvShmSize);
     if (Ret != 0)
     {
-        printf("init m_LoaderQueue[%d/%d] failed, Ret=%d\n", LoaderShmKey, LoaderShmSize, Ret);
+        printf("init m_LoaderRecvQueue[%d/%d] failed, Ret=%d\n", LoaderRecvShmKey, LoaderRecvShmSize, Ret);
         return -1;
     }
 
+    if (LoaderSendShmKey == 0)
+    {
+        printf("conf LOADER/LoaderSendShmKey[%d] is not valid\n", LoaderSendShmKey);
+        return -1;
+    }
+
+    if (LoaderSendShmSize == 0)
+    {
+        printf("conf LOADER/LoaderSendShmSize[%d] is not valid\n", LoaderSendShmSize);
+        return -1;
+    }
+
+    Ret = m_LoaderSendQueue.Init(LoaderSendShmKey, LoaderSendShmSize);
+    if (Ret != 0)
+    {
+        printf("init m_LoaderRecvQueue[%d/%d] failed, Ret=%d\n", LoaderSendShmKey, LoaderSendShmSize, Ret);
+        return -1;
+    }
+    
     //初始化进程数
     SetChildNum(ProcNum, ProcNum);
 
@@ -186,22 +209,22 @@ int CLoaderUser::Entity(int argc, char *argv[])
     {
         EmptyFlag = 0;
 
-        char RecvBuff[128] = {0};
-        int RecvLen = sizeof(RecvBuff);
-        Ret = m_LoaderQueue.OutQueue(RecvBuff, &RecvLen);
-        if (Ret == m_LoaderQueue.E_SHM_QUEUE_EMPTY)
+        char pRecvBuff[XY_PKG_MAX_LEN] = {0};
+        int RecvLen = sizeof(pRecvBuff);
+        Ret = m_LoaderRecvQueue.OutQueue(pRecvBuff, &RecvLen);
+        if (Ret == m_LoaderRecvQueue.E_SHM_QUEUE_EMPTY)
         {
             EmptyFlag = 1;
         }
-        else if (Ret != m_LoaderQueue.SUCCESS)
+        else if (Ret != m_LoaderRecvQueue.SUCCESS)
         {
-            XF_LOG_WARN(0, 0, "m_LoaderQueue out failed, ret=%d", Ret);
+            XF_LOG_WARN(0, 0, "m_LoaderRecvQueue out failed, ret=%d", Ret);
             EmptyFlag = 1;    //为了防止死循环输出日志
         }
         else
         {
             mm::LoadUserInfoReq CurReq;
-            if(!CurReq.ParseFromArray(RecvBuff, RecvLen))
+            if(!CurReq.ParseFromArray(pRecvBuff, RecvLen))
             {
                 XF_LOG_WARN(0, 0, "pkg parse failed");
                 return -1;
@@ -230,31 +253,35 @@ int CLoaderUser::ProcessLoaderUserInfo(uint64_t UserID, const string& strRequest
     char SqlStr[256] = {0};
     int SqlLen = 0;
 
-    int DBIndex = UserID % USER_DATABASE_NUM;
-    int TableIndex = (UserID>>1) % USER_TABLE_NUM;
-
+    int DBIndex = GetUserDBIndex(UserID);
+    int TableIndex = GetUserTableIndex(UserID);
+    int Result = 0;
+do{
     int RecNum = 0;
     SqlLen = snprintf(SqlStr, sizeof(SqlStr), "select data from %s.%s_%d where id=%lu limit 1", m_DBConfig[DBIndex].DBName, m_DBConfig[DBIndex].TableName, TableIndex, UserID);
     Ret = m_DBConn[DBIndex].Query(SqlStr, SqlLen, &RecNum);
     if (Ret != 0)
     {
+        Result = -1;
         XF_LOG_WARN(0, UserID,  "query db ret failed, ret=%d, errmsg=%s, sql=%s", Ret, m_DBConn[DBIndex].GetErrMsg(), SqlStr);
         //TODO 需要返回加载失败
-        return -1;
+        break;
     }
 
     ShmUserInfo CurUserInfo;
     
-do{
+
     //用户不存在
     if (0 == RecNum)
     {
+        Result = -1;
         XF_LOG_WARN(0, UserID, "query db recnum is 0, rec_num=%d, sql=%s", RecNum, SqlStr);
         break;
     }
 
     if (RecNum != 1)
     {
+        Result = -1;
         XF_LOG_WARN(0, UserID, "query db recnum is not 1, rec_num=%d, sql=%s", RecNum, SqlStr);
         break;
     }
@@ -265,6 +292,7 @@ do{
 
     if (CurRow[0] == NULL || pCurRowLen[0] == 0)
     {
+        Result = -1;
         XF_LOG_WARN(0, UserID,  "sql query ret is not valid, prow=%s, len=%ld", CurRow[0], pCurRowLen[0]);
         break;
     }
@@ -272,23 +300,46 @@ do{
     Ret = UserProtoString2Struct(CurUserInfo, std::string(CurRow[0], pCurRowLen[0]));
     if (Ret != 0)
     {
+        Result = -1;
         XF_LOG_WARN(0, UserID,  "UserProtoString2Struct faile ret=%d", Ret);
         break;
     }
 
-    CurUserInfo.Status = USER_STATUS_LOADED;
-
     Ret = m_UserShm.InsertUserInfo(CurUserInfo);
     if (0 != Ret)
     {
+        Result = -1;
         XF_LOG_WARN(0, UserID,  "UpdateUserInfo faile");
+        break;
     }
 
 }while(false);
-
+    
     //释放查询结果
     m_DBConn[DBIndex].ReleaseRes();
 
+    mm::LoadUserInfoRsp CurRsp;
+    CurRsp.set_ret(Result);
+    CurRsp.set_request(strRequest);
+
+    const int BuffLen = XY_PKG_MAX_LEN+16;
+    char acBuff[BuffLen] = {0};
+
+    int PkgLen = CurRsp.ByteSize();
+
+    if(!CurRsp.SerializeToArray(acBuff, BuffLen))
+    {
+        XF_LOG_WARN(0, 0, "pack err msg failed");
+        return -1;
+    }
+    
+    Ret = m_LoaderSendQueue.InQueue(acBuff, PkgLen);
+    if(Ret != CShmQueue::SUCCESS)
+    {
+        XF_LOG_WARN(0, UserID, "m_LoaderSendQueue InQueue failed, Ret=%d", Ret);
+        return -1;
+    }
+    
     return 0;
 }
 
@@ -301,8 +352,6 @@ int CLoaderUser::UserProtoString2Struct(ShmUserInfo &CurUserInfo, const std::str
         XF_LOG_WARN(0, 0,  "error=%s|ParseFromString faile|errmsg:%s", User.InitializationErrorString().c_str(),User.ShortDebugString().c_str());
         return -1;
     }
-
-    uint64_t UserID = User.userid();
 
     CurUserInfo.UserID = User.userid();
     CurUserInfo.Status = USER_STATUS_LOADED;

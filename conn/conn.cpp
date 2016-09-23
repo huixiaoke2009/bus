@@ -1330,7 +1330,7 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
         }
         case CMD_PREFIX_USER:
         {
-            int ServerID = SERVER_USER_BEGIN + CurHeaderIn.UserID % MAX_USER_SERVER_NUM + 1;
+            int ServerID = GetUserServer(CurHeaderIn.UserID);
             Send2Server(ServerID, TO_SRV, 0, pProcessBuff, TotalPkgLen);
             break;
         }

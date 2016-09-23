@@ -29,11 +29,11 @@ const unsigned int Cmd_Disconnect_Rsp = 0x00010004;
 
 
 /******************* AUTH模块 *******************/
-// 注册
+// 注册,app使用
 const unsigned int Cmd_Auth_Register_Req = 0x00020001;
 const unsigned int Cmd_Auth_Register_Rsp = 0x00020002;
 
-// 登录协议
+// 登录协议,app使用
 const unsigned int Cmd_Auth_Login_Req = 0x00020003;
 const unsigned int Cmd_Auth_Login_Rsp = 0x00020004;
 
@@ -50,7 +50,12 @@ const unsigned int Cmd_GNS_UnRegister_Rsp = 0x00030004;
 const unsigned int Cmd_User_Register_Req = 0x00040001;
 const unsigned int Cmd_User_Register_Rsp = 0x00040002;
 
+// 请求添加好友信息 app使用
 const unsigned int Cmd_User_AddFriend_Req = 0x00040003;
 const unsigned int Cmd_User_AddFriend_Rsp = 0x00040004;
+
+// 请求添加好友信息 内部使用
+const unsigned int Cmd_User_AddFriend_Req2 = 0x00040005;
+const unsigned int Cmd_User_AddFriend_Rsp2 = 0x00040006;
 
 #endif
