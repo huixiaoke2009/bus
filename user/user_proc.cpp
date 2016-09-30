@@ -65,6 +65,7 @@ CUser::CUser()
 {
     m_ServerID = 0;
     m_StateTime = 0;
+    m_CheckTime = 0;
     m_pSendBuff = NULL;
 }
 
@@ -119,6 +120,7 @@ int CUser::Init(const char *pConfFile)
         IniFile.GetInt("USER", "ServerID", 0, (int*)&m_ServerID);
         IniFile.GetString("USER", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
         IniFile.GetInt("USER", "StateTime", 0, &m_StateTime);
+        IniFile.GetInt("USER", "CheckTime", 0, &m_CheckTime);
         IniFile.GetInt("USER", "LoaderSendShmKey", 0, &LoaderSendShmKey);
         IniFile.GetInt("USER", "LoaderSendShmSize", 0, &LoaderSendShmSize);
         IniFile.GetInt("USER", "LoaderRecvShmKey", 0, &LoaderRecvShmKey);
@@ -288,6 +290,7 @@ int CUser::Run()
     int RecvLen = XY_MAXBUFF_LEN;
 
     time_t LastStateTime = time(NULL);
+    time_t LastCheckTime = time(NULL);
     
     while(!StopFlag)
     {
@@ -374,6 +377,13 @@ int CUser::Run()
             LastStateTime = NowTime;
             SendStateMessage();
         }
+
+        if(NowTime - LastCheckTime >= m_CheckTime)
+        {
+            LastCheckTime = NowTime;
+            CheckValid();
+        }
+        
 
         if(EmptyFlag)
         {
@@ -508,6 +518,8 @@ int CUser::DealPkg(const char *pCurBuffPos, int PkgLen)
                    return -1;
                 }
 
+                WriteUserInfo(OtherUserID);
+
                 app::AddFriendRsp CurRsp;
                 CurRsp.set_ret(0);
                 
@@ -575,6 +587,8 @@ int CUser::DealPkg(const char *pCurBuffPos, int PkgLen)
                XF_LOG_WARN(0, UserID2, "m_UserShm AddFriendReq failed, Ret=%d", Ret);
                return -1;
             }
+
+            WriteUserInfo(UserID2);
 
             app::AddFriendRsp CurRsp;
             CurRsp.set_ret(0);
@@ -767,3 +781,14 @@ int CUser::WriteUserInfo(uint64_t UserID)
     return 0;
 }
 
+int CUser::CheckValid()
+{
+    vector<uint64_t> vctUserID;
+    m_UserShm.CheckUserIsValid(&vctUserID);
+    for(int i = 0; i < (int)vctUserID.size(); i++)
+    {
+        m_UserShm.RemoveUserInfoWhenInValid(vctUserID[i]);
+    }
+
+    return 0;
+}

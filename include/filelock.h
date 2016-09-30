@@ -10,6 +10,9 @@
 #define LOCK_HASHLIST_HEAD(LockType) CShmUserLock userHashListHeadLock(m_UserInfoLock, LockType, 0, 1)
 // 锁住一个bit,每个用户对应一个bit
 #define LOCK_USER(LockType, UserID) CShmUserLock userLock(m_UserInfoLock, LockType, 2+(UserID%m_MaxUserNodeNum), 1)
+// 锁住一个index,遍历回调某个Index使用
+#define LOCK_INDEX(LockType, Index) CShmUserLock indexLock(m_UserInfoLock, LockType, 2+(Index), 1)
+
 
 class CShmUserLock
 {

@@ -15,6 +15,8 @@ using namespace mmlib;
 CUserShmApi::CUserShmApi()
 {
     m_MaxUserNodeNum = 0;
+    m_CheckUserPos = 0;
+    m_pUserHead = NULL;
 }
 
 CUserShmApi::~CUserShmApi()
@@ -191,6 +193,36 @@ int CUserShmApi::RemoveUserInfo(uint64_t UserID)
     return 0;
 }
 
+int CUserShmApi::RemoveUserInfoWhenInValid(uint64_t UserID)
+{
+    int Ret = 0;
+    LOCK_HASHLIST_HEAD(CFileLock::FILE_LOCK_WRITE);
+    LOCK_USER(CFileLock::FILE_LOCK_WRITE, UserID);
+    ShmUserInfo* pCurUserInfo = m_UserInfoMap.Get(UserID);
+    if(pCurUserInfo == NULL)
+    {
+        XF_LOG_WARN(0, UserID, "Get failed, Ret=%d", Ret);
+        return -1;
+    }
+
+    time_t nowTime= time(NULL);
+    if((uint64_t)(nowTime - USER_INVALID_TIME) <= pCurUserInfo->LastActiveTime)
+    {
+        return 0;   
+    }
+    
+    Ret = m_UserInfoMap.Remove(UserID);
+    if(Ret != 0)
+    {
+        XF_LOG_WARN(0, UserID, "Remove failed, Ret=%d", Ret);
+        return -1;
+    }
+
+    XF_LOG_INFO(0, UserID, "UserID = %lu Remove success", UserID);
+
+    return 0;
+}
+
 int CUserShmApi::GetUserInfo(uint64_t UserID, ShmUserInfo& Info)
 {
     int Ret = 0;
@@ -223,10 +255,66 @@ int CUserShmApi::UpdateUserInfo(const ShmUserInfo &newUserInfo)
     return 0;
 }
 
+void CUserShmApi::MemFullCallBack(uint64_t UserID, ShmUserInfo &CurUserInfo, void* p)
+{
+    time_t nowTime= time(NULL);
+    if((uint64_t)(nowTime - USER_INVALID_TIME) > CurUserInfo.LastActiveTime)
+    {
+        vector<uint64_t>* pVct = (vector<uint64_t>*) p;
+        pVct->push_back(UserID);
+    }
+}
+
+int CUserShmApi::CheckUserIsValid(vector<uint64_t>* pVct)
+{
+    if(pVct->size() == 0)
+    {
+        LOCK_INDEX(CFileLock::FILE_LOCK_WRITE, m_CheckUserPos);
+        m_UserInfoMap.ProcessAll(m_CheckUserPos, MemFullCallBack, (void*)pVct);
+        m_CheckUserPos = (m_CheckUserPos+1)%m_MaxUserNodeNum;
+    }
+
+    return 0;
+}
 
 
 int CUserShmApi::AddFriendReq(uint64_t UserID, uint64_t OtherUserID, const string& strNickName)
 {
+    LOCK_USER(CFileLock::FILE_LOCK_WRITE, OtherUserID);
+    ShmUserInfo* pCurUserInfo = m_UserInfoMap.Get(OtherUserID);
+    if(pCurUserInfo == NULL)
+    {
+        XF_LOG_WARN(0, OtherUserID, "get user failed");
+        return -1;
+    }
+
+    uint64_t MaxRequestTime = 0;
+    int Index = 0;
+    for(int i = 0; i < MAX_REQUEST_NUM; i++)
+    {
+        RequestInfo& Request = pCurUserInfo->RequestList[i];
+        if(Request.UserID == 0 || Request.IsValid == 0)
+        {
+            Index = i;
+            break;
+        }
+        else
+        {
+            if(Request.RequestTime > MaxRequestTime)
+            {
+                MaxRequestTime = Request.RequestTime;
+                Index = i;
+            }
+        }
+    }
+
+    RequestInfo& Request = pCurUserInfo->RequestList[Index];
+    Request.UserID = UserID;
+    snprintf(Request.NickName, MAX_NAME_LENGTH, "%s", strNickName.c_str());
+    Request.RequestTime = time(NULL);
+
+    pCurUserInfo->LastActiveTime = time(NULL);
+            
     return 0;
 }
 

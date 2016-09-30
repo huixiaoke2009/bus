@@ -28,10 +28,12 @@ class CUser
         int LoadUserInfo(uint64_t UserID, const std::string& strRequest);
         int LoadUserInfoWhileNotExist(uint64_t UserID, const std::string& strRequest);
         int WriteUserInfo(uint64_t UserID);
+        int CheckValid();
         
     private:
         unsigned int m_ServerID;
         int m_StateTime;
+        int m_CheckTime;
         
         mmlib::CShmQueue m_SendQueue;
         mmlib::CShmQueue m_RecvQueue;

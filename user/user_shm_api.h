@@ -39,6 +39,7 @@ typedef struct tagRequestInfo
     uint64_t UserID;
     char NickName[MAX_NAME_LENGTH];
     uint64_t RequestTime;
+    char IsValid;
 
     tagRequestInfo()
     {
@@ -50,6 +51,7 @@ typedef struct tagShmUserInfo
 {
     uint64_t UserID;
     int Status;
+    uint64_t LastActiveTime;
     char NickName[MAX_NAME_LENGTH];
     int Level;
     int VipLevel;
@@ -81,20 +83,22 @@ class CUserShmApi
         int Init(const char *pConfFile);
         int InsertUserInfo(const ShmUserInfo& Info);
         int RemoveUserInfo(uint64_t UserID);
+        int RemoveUserInfoWhenInValid(uint64_t UserID);
         int GetUserInfo(uint64_t UserID, ShmUserInfo& Info);
         int UpdateUserInfo(const ShmUserInfo &newUserInfo);
-
+        static void MemFullCallBack(uint64_t UserID, ShmUserInfo &CurUserInfo, void* p);
+        int CheckUserIsValid(std::vector<uint64_t>* pVct);
         int AddFriendReq(uint64_t UserID, uint64_t OtherUserID, const std::string& strNickName);
             
    private:
-
+        int m_CheckUserPos;
         mmlib::CFileLock m_UserInfoLock;
         
         int m_MaxUserNodeNum;
         mmlib::CShareMem m_UserMem;
         UserMemHead* m_pUserHead;
         mmlib::CHashListNoLock<uint64_t, ShmUserInfo> m_UserInfoMap;
-};
+}; 
 
 
 #endif

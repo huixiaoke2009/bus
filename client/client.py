@@ -11,17 +11,18 @@ XY_HEADER_LEN = 17;
 PACKAGE_HEADER = ">IIIHHb";
 
 class CClient:
-    HOST='192.168.206.128'
-    PORT=10000
-    UserID = 1472978293
-    Passwd = "12345"
+    HOST='192.168.206.128';
+    PORT=10000;
+    UserID = 1472978293;
+    Passwd = "12345";
     
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM);
+    s = None;
     
     def __init__(self, host, port):
         self.HOST = host;
         self.PORT = port;
         
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM);
         self.s.connect((self.HOST, self.PORT));
         
     def __del__(self):
@@ -48,6 +49,8 @@ class CClient:
         if CurRsp.ret != 0:
             print 'login error'
             return -1;
+        else:
+            print 'login success!!!'
             
         return 0;
             
@@ -77,6 +80,8 @@ class CClient:
         if CurRsp.ret != 0:
             print 'register error'
             return -1;
+        else:
+            print 'register success!!!'
         
         self.UserID = CurRsp.userid;
         self.Passwd = passwd;
@@ -120,8 +125,10 @@ class CClient:
         return 0;
     
 def main():
-    c = CClient('192.168.206.128', 10000);
-    c.Run();
+    while True:
+        c = CClient('192.168.206.128', 10000);
+        c.Run();
+        time.sleep(2);
 
 
 if __name__ == "__main__":
