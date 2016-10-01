@@ -1659,20 +1659,36 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             time_t _time = CurReq.time();
             
             ShmGnsInfo* pCurGnsInfo = m_GnsInfoMap.Get(UserID);
-            if(pCurGnsInfo != NULL)
+            if(pCurGnsInfo == NULL)
             {
-                if(pCurGnsInfo->ServerID == GetServerID())
-                {
-                    std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(pCurGnsInfo->ConnPos);
-                    if(iter != m_PosConnMap.end() && iter->second->GetUserID() == UserID)
-                    {
-                        ReleaseConn(iter ,false);
-                    }
-                }
+                ShmGnsInfo Info;
+                Info.UserID = UserID;
+                Info.ConnPos = ConnPos;
+                Info.ServerID = ServerID;
+                Info.Status = GNS_USER_STATUS_ACTIVE;
+                Info.LastActiveTime = time(NULL);
 
+                int Ret = m_GnsInfoMap.Insert(UserID, Info);
+                if(Ret != 0)
+                {
+                    XF_LOG_WARN(0, UserID, "m_GnsInfoMap Insert failed, Ret=%d", Ret);
+                    //return -1;
+                }
+            }
+            else
+            {
                 // 这里要求两台服务器的时间要同步
                 if(pCurGnsInfo->LastActiveTime < _time)
                 {
+                    if(pCurGnsInfo->ServerID == GetServerID())
+                    {
+                        std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(pCurGnsInfo->ConnPos);
+                        if(iter != m_PosConnMap.end() && iter->second->GetUserID() == UserID)
+                        {
+                            ReleaseConn(iter ,false);
+                        }
+                    }
+                    
                     pCurGnsInfo->ConnPos = ConnPos;
                     pCurGnsInfo->ServerID = ServerID;
                     pCurGnsInfo->Status = GNS_USER_STATUS_ACTIVE;
