@@ -50,7 +50,7 @@ class CClient:
             print 'login error'
             return -1;
         else:
-            print 'login success!!!'
+            print '%d login success!!!'%self.UserID
             
         return 0;
             
@@ -81,7 +81,7 @@ class CClient:
             print 'register error'
             return -1;
         else:
-            print 'register success!!!'
+            print '%d register success!!!'%CurRsp.userid
         
         self.UserID = CurRsp.userid;
         self.Passwd = passwd;
@@ -113,10 +113,11 @@ class CClient:
             
     def Run(self):
         Ret = 0;
+        print '-------------------------'
         Ret = self.SendRecvRegisterReq();
         if Ret != 0:
             return -1;
-            
+        
         Ret = self.SendRecvLoginReq();
         if Ret != 0:
             return -1;
