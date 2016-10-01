@@ -1465,7 +1465,7 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
             }
             else
             {
-                vctDstID.push_back(DstID);
+                vctDstID.push_back(iter_vct[i]);
             }
         }
     }
