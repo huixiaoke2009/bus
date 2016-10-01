@@ -13,6 +13,8 @@ stop()
     killall conn
     killall auth
     killall user
+    killall loader
+    killall writer
 }
 
 usage()
