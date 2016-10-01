@@ -454,7 +454,7 @@ int CConn::Init(const char *pConfFile)
         return -1;
     }
 
-    OpenLog(ModuleName);
+    OpenLog(CStrTool::Format("%s_%d", ModuleName, m_ServerID).c_str());
     if (LogLocal == 1)
     {
         SetLogLocal(1, LogLevel, LogPath);
