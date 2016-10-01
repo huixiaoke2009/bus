@@ -16,8 +16,6 @@ message ErrorMsg
 message LoginDisconnect
 {
     required uint64 userid = 1;
-    required int32 serverid = 2;
-    required uint32 connpos = 3;
 }
 
 message LoginNotice

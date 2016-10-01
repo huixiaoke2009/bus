@@ -875,8 +875,6 @@ void CConn::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInf
             // 通知其它CONN连接已断开
             mm::LoginDisconnect CurReq;
             CurReq.set_userid(UserID);
-            CurReq.set_serverid(GetServerID());
-            CurReq.set_connpos(itrConnInfoMap->first);
 
             XYHeaderIn Header;
             Header.SrcID = GetServerID();
@@ -1694,8 +1692,6 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             }
             
             uint64_t UserID = CurReq.userid();
-            int ServerID = CurReq.serverid();
-            unsigned int ConnPos = CurReq.connpos();
 
             ShmGnsInfo* pCurGnsInfo = m_GnsInfoMap.Get(UserID);
             if(pCurGnsInfo != NULL)
