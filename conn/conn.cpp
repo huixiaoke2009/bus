@@ -1697,18 +1697,20 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             int ServerID = CurReq.serverid();
             unsigned int ConnPos = CurReq.connpos();
 
-            std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(ConnPos);
-            if(iter == m_PosConnMap.end())
+            ShmGnsInfo* pCurGnsInfo = m_GnsInfoMap.Get(UserID);
+            if(pCurGnsInfo != NULL)
             {
-                return -1;
+                if(pCurGnsInfo->ServerID == GetServerID())
+                {
+                    std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(pCurGnsInfo->ConnPos);
+                    if(iter == m_PosConnMap.end())
+                    {
+                        return -1;
+                    }
+                    
+                    ReleaseConn(iter, false);
+                }
             }
-
-            if(iter->second->GetUserID() != UserID || ServerID != GetServerID())
-            {
-                return -1;
-            }
-
-            ReleaseConn(iter, false);
             
             break;
         }
