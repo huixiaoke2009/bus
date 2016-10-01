@@ -24,9 +24,9 @@ const unsigned int Cmd_StateChange = 0x00000004;
 
 /******************* CONN模块 *******************/
 // 断开连接
-const unsigned int Cmd_Disconnect_Req = 0x00010003;
-const unsigned int Cmd_Disconnect_Rsp = 0x00010004;
-
+const unsigned int Cmd_Disconnect = 0x00010003;
+// 登录通知
+const unsigned int Cmd_LoginNotice = 0x00010004;
 
 /******************* AUTH模块 *******************/
 // 注册,app使用
@@ -37,14 +37,7 @@ const unsigned int Cmd_Auth_Register_Rsp = 0x00020002;
 const unsigned int Cmd_Auth_Login_Req = 0x00020003;
 const unsigned int Cmd_Auth_Login_Rsp = 0x00020004;
 
-/******************* GNS模块 *******************/
-// 登记
-const unsigned int Cmd_GNS_Register_Req = 0x00030001;
-const unsigned int Cmd_GNS_Register_Rsp = 0x00030002;
 
-// 取消登记
-const unsigned int Cmd_GNS_UnRegister_Req = 0x00030003;
-const unsigned int Cmd_GNS_UnRegister_Rsp = 0x00030004;
 
 /******************* USER模块 *******************/
 const unsigned int Cmd_User_Register_Req = 0x00040001;

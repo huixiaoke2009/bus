@@ -338,7 +338,6 @@ CConn::CConn()
     m_ConnPosCnt = 0;
 
     m_PosConnMap.clear();
-    m_UserIDConnMap.clear();
     m_itrCurCheckConn = m_PosConnMap.begin();
     m_TimeOut = 0;
 
@@ -390,6 +389,9 @@ int CConn::Init(const char *pConfFile)
     char ListenStr[1024] = {0};
     char BusConfPath[256] = {0};
 
+    int GnsShmKey = 0;
+    int GnsShmSize = 0;
+    
     char ModuleName[256] = {0};
     int LogLocal = 0;
     int LogLevel = 0;
@@ -403,8 +405,11 @@ int CConn::Init(const char *pConfFile)
         IniFile.GetString("CONN", "Listen", "", ListenStr, sizeof(ListenStr));
         IniFile.GetInt("CONN", "TimeOut", 600, &m_TimeOut);    //默认10分钟没有请求，将断开链接
         IniFile.GetInt("CONN", "StateTime", 0, &m_StateTime);
-        
         IniFile.GetString("CONN", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
+
+        IniFile.GetInt("CONN", "GnsShmKey", 0, &GnsShmKey);
+        IniFile.GetInt("CONN", "GnsShmSize", 0, &GnsShmSize);
+        IniFile.GetInt("CONN", "NodeNum", 0, &m_MaxGnsNodeNum);
         
         IniFile.GetString("LOG", "ModuleName", "conn", ModuleName, sizeof(ModuleName));
         IniFile.GetInt("LOG", "LogLocal", 1, &LogLocal);
@@ -606,6 +611,96 @@ int CConn::Init(const char *pConfFile)
         printf("INFO:service listen ok, ip=%s, port=%d\n", inet_ntoa(*(struct in_addr *)(&addr.sin_addr.s_addr)), ntohs(addr.sin_port));
     }
 
+    if (GnsShmKey == 0)
+    {
+        printf("ERR:conf GNS/GnsShmKey is not valid\n");
+        return -1;
+    }
+
+    if (GnsShmSize == 0)
+    {
+        printf("ERR:conf GNS/GnsShmSize is not valid\n");
+        return -1;
+    }
+    
+    if (m_MaxGnsNodeNum == 0)
+    {
+        printf("ERR:conf GNS/NodeNum is not valid\n");
+        return -1;
+    }
+
+    int GnsMemHeadSize = GNS_MEM_HEAD_SIZE;
+    int GnsInfoMemSize = m_GnsInfoMap.CalcSize(m_MaxGnsNodeNum, m_MaxGnsNodeNum);
+
+    int GnsMemNeed =  GnsInfoMemSize + GnsMemHeadSize;
+    if (GnsMemNeed > GnsShmSize)
+    {
+        printf("ERR:conf GNS/GnsShmSize[%d] is not enough, need %d\n", GnsShmSize, GnsMemNeed);
+        return -1;
+    }
+
+    printf("GnsMemNeed=%d, GnsShmSize=%d\n", GnsMemNeed, GnsShmSize);
+
+    Ret = m_GnsMem.Create(GnsShmKey, GnsShmSize, 0666);
+    if ((Ret != m_GnsMem.SUCCESS)&&(Ret != m_GnsMem.SHM_EXIST))
+    {
+        printf("ERR:create gns shm failed, key=%d, size=%d, ret=%d\n", GnsShmKey, GnsShmSize, Ret);
+        return -1;
+    }
+
+    Ret = m_GnsMem.Attach();
+    if (Ret != m_GnsMem.SUCCESS)
+    {
+        printf("ERR:attach gns shm failed, key=%d, size=%d, ret=%d\n", GnsShmKey, GnsShmSize, Ret);
+        return -1;
+    }
+
+    printf("INFO:gns shm create succ\n");
+
+    m_pGnsHead = (tagGnsMemHead *)m_GnsMem.GetMem();
+    void *pGnsInfoMem = ((char *)m_GnsMem.GetMem()) + GnsMemHeadSize;
+
+    if (m_pGnsHead == NULL)
+    {
+        printf("ERR:create shm failed\n");
+        return -1;
+    }
+
+    bool ClearFlag = false;
+    if (memcmp(m_pGnsHead->Magic, GNS_MEM_MAGIC, sizeof(m_pGnsHead->Magic)) != 0)
+    {
+        ClearFlag = true;
+        memset(m_pGnsHead, 0, GNS_MEM_HEAD_SIZE);
+        memcpy(m_pGnsHead->Magic, GNS_MEM_MAGIC, sizeof(m_pGnsHead->Magic));
+        printf("WARN:gns map shoud clear\n");
+    }
+
+    Ret = m_GnsInfoMap.Init(pGnsInfoMem, GnsInfoMemSize, m_MaxGnsNodeNum, m_MaxGnsNodeNum);
+    if (Ret != 0)
+    {
+        printf("ERR:init gns info shm failed, ret=%d\n", Ret);
+        return -1;
+    }
+
+    printf("INFO:gns info map init succ\n");
+
+    if (ClearFlag)
+    {
+        m_GnsInfoMap.Clear();
+        ClearFlag = false;
+    }
+
+    Ret = m_GnsInfoMap.Verify();
+    if (Ret != 0)
+    {
+        printf("WARN:gns info verify failed, Ret = %d\n", Ret);
+        return -1;
+    }
+    else
+    {
+        printf("INFO:gns info map verify succ\n");
+    }
+
     return 0;
 }
 
@@ -754,7 +849,7 @@ void CConn::CheckConn()
     return;
 }
 
-void CConn::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInfoMap, bool bSend2Gns)
+void CConn::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInfoMap, bool bSend)
 {
     CConnInfo *pCurConnInfo = itrConnInfoMap->second;
     epoll_ctl(m_EpollFD, EPOLL_CTL_DEL, pCurConnInfo->GetSockID(), NULL);
@@ -764,39 +859,40 @@ void CConn::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInf
         m_itrCurCheckConn++;
     }
 
-    //删除UserIDConnMap中的内容
-    unsigned long long UserID = pCurConnInfo->GetUserID();
+    uint64_t UserID = pCurConnInfo->GetUserID();
+    
     if (UserID != 0)
     {
-        std::map<unsigned long long, CConnInfo*>::iterator pCurUserIDConn = m_UserIDConnMap.find(UserID);
-        if (pCurUserIDConn != m_UserIDConnMap.end())
+        ShmGnsInfo* pCurGnsInfo = m_GnsInfoMap.Get(UserID);
+        if(pCurGnsInfo != NULL)
         {
-            m_UserIDConnMap.erase(pCurUserIDConn);
-            XF_LOG_INFO(0, UserID, "DEL_USER_CONN_MAP|%llu", UserID);
+            pCurGnsInfo->Status = GNS_USER_STATUS_UNACTIVE;
+            pCurGnsInfo->LastActiveTime = time(NULL);
         }
         
-        if(bSend2Gns)
+        if(bSend)
         {
-            // 通知GNS断开
-            mm::GNSUnRegisterReq CurReq;
+            // 通知其它CONN连接已断开
+            mm::LoginDisconnect CurReq;
             CurReq.set_userid(UserID);
             CurReq.set_serverid(GetServerID());
             CurReq.set_connpos(itrConnInfoMap->first);
 
             XYHeaderIn Header;
             Header.SrcID = GetServerID();
-            Header.CmdID = Cmd_GNS_UnRegister_Req;
+            Header.CmdID = Cmd_Disconnect;
             Header.SN = 0;
             Header.ConnPos = itrConnInfoMap->first;
             Header.UserID = UserID;
             Header.PkgTime = time(NULL);
             Header.Ret = 0;
             
-            Send2Server(Header, SERVER_GNS, TO_SRV, 0, CurReq);
+            Send2Server(Header, GROUP_CONN, TO_GRP_ALLNOME, 0, CurReq);
         }
     }
 
     m_PosConnMap.erase(itrConnInfoMap);
+    
     XF_LOG_INFO(0, UserID, "DEL_POS_CONN_MAP|%d", itrConnInfoMap->first);
 
     SAFE_DELETE(pCurConnInfo);
@@ -1054,7 +1150,7 @@ int CConn::Send2Client(int CurConnPos, const char *pSendBuff, int SendBuffLen)
     std::map<unsigned int, CConnInfo*>::iterator pConnInfoMap = m_PosConnMap.find(CurConnPos);
     if (pConnInfoMap == m_PosConnMap.end())
     {
-        XF_LOG_WARN(0, 0, "out_queue find invalid cpos|%u", CurConnPos);
+        XF_LOG_WARN(0, 0, "find invalid cpos|%u", CurConnPos);
         return -1;
     }
 
@@ -1286,7 +1382,7 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
                 CurReq2.set_passwd(strPasswd);
                 CurReq2.set_plat(Plat);
 
-                Send2Server(CurHeaderIn, GROUP_AUTH, TO_GRP, 0, CurReq2);
+                Send2Server(CurHeaderIn, GROUP_AUTH, TO_GRP_RND, 0, CurReq2);
             }
             else if(CurHeaderIn.CmdID == Cmd_Auth_Register_Req)
             {
@@ -1314,18 +1410,13 @@ int CConn::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned in
                 CurReq2.set_address(strAddress);
                 CurReq2.set_email(strEmail);
 
-                Send2Server(CurHeaderIn, GROUP_AUTH, TO_GRP, 0, CurReq2);
+                Send2Server(CurHeaderIn, GROUP_AUTH, TO_GRP_RND, 0, CurReq2);
             }
             else
             {
-                Send2Server(GROUP_AUTH, TO_GRP, 0, pProcessBuff, TotalPkgLen);
+                Send2Server(GROUP_AUTH, TO_GRP_RND, 0, pProcessBuff, TotalPkgLen);
             }
             
-            break;
-        }
-        case CMD_PREFIX_GNS:
-        {
-            Send2Server(SERVER_GNS, TO_SRV, 0, pProcessBuff, TotalPkgLen);
             break;
         }
         case CMD_PREFIX_USER:
@@ -1416,12 +1507,6 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 CurHeader.PkgTime = time(NULL);
                 CurHeader.Ret = 0;
 
-                if(!CurReq.SerializeToArray(m_pSendBuff+CurHeader.GetHeaderLen(), XY_PKG_MAX_LEN-CurHeader.GetHeaderLen()))
-                {
-                    XF_LOG_WARN(0, 0, "pack err msg failed");
-                    return -1;
-                }
-
                 int ServerID = SERVER_USER_BEGIN + UserID % MAX_USER_SERVER_NUM + 1;
                 Send2Server(CurHeader, ServerID, TO_SRV, 0, CurReq);
             }
@@ -1479,93 +1564,68 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             uint64_t UserID = CurRsp.userid();
             int Result = CurRsp.ret();
             
-            if(Result != 0)
+            if(Result == 0)
             {
-                // 不成功,返回客户端失败原因
-                
-                app::LoginRsp CurRsp2;
-                CurRsp2.set_ret(Result);
-                
-                XYHeader CurHeader;
-                CurHeader.PkgLen = CurRsp2.ByteSize() + CurHeader.GetHeadLen();
-                CurHeader.CmdID = Cmd_Auth_Login_Rsp;
-                CurHeader.SN = Header.SN;
-                CurHeader.CkSum = 0;
-                CurHeader.Ret = Header.Ret;
-                CurHeader.Compresse = 0;
-                CurHeader.Write(m_pSendBuff);
-                int HeaderLen = CurHeader.GetHeadLen();
-                if(!CurRsp2.SerializeToArray(m_pSendBuff+HeaderLen, XY_PKG_MAX_LEN-HeaderLen))
+                // 修改连接信息
+                std::map<unsigned int, CConnInfo*>::iterator pConnInfoMap = m_PosConnMap.find(ConnPos);
+                if (pConnInfoMap == m_PosConnMap.end())
                 {
-                    XF_LOG_WARN(0, 0, "pack err msg failed");
+                    XF_LOG_WARN(0, 0, "invalid cpos|%u", ConnPos);
                     return -1;
                 }
+            
+                CConnInfo *pCurConnInfo = pConnInfoMap->second;
+                pCurConnInfo->SetConnType(CONN_AUTH);
+                pCurConnInfo->SetUserID(UserID);
 
-                Send2Client(ConnPos, m_pSendBuff, CurHeader.PkgLen);
-            }
-            else
-            {
-                // 成功,去GNS注册
-                mm::GNSRegisterReq CurReq;
+                time_t nowTime = time(NULL);
+                // 修改GNS信息,自家门口登录的,无条件覆盖
+                ShmGnsInfo* pCurGnsInfo = m_GnsInfoMap.Get(UserID);
+                if(pCurGnsInfo == NULL)
+                {
+                    ShmGnsInfo Info;
+                    Info.UserID = UserID;
+                    Info.ConnPos = ConnPos;
+                    Info.ServerID = GetServerID();
+                    Info.Status = GNS_USER_STATUS_ACTIVE;
+                    Info.LastActiveTime = nowTime;
+
+                    int Ret = m_GnsInfoMap.Insert(UserID, Info);
+                    if(Ret != 0)
+                    {
+                        XF_LOG_WARN(0, UserID, "m_GnsInfoMap Insert failed, Ret=%d", Ret);
+                        //return -1;
+                    }
+                }
+                else
+                {
+                    pCurGnsInfo->ConnPos = ConnPos;
+                    pCurGnsInfo->ServerID = GetServerID();
+                    pCurGnsInfo->Status = GNS_USER_STATUS_ACTIVE;
+                    pCurGnsInfo->LastActiveTime = nowTime;
+                }
+                
+                // 成功,通知其他CONN
+                mm::LoginNotice CurReq;
                 CurReq.set_userid(UserID);
                 CurReq.set_serverid(GetServerID());
                 CurReq.set_connpos(ConnPos);
-
+                CurReq.set_time(nowTime);
+                
                 XYHeaderIn CurHeader;
                 CurHeader.SrcID = GetServerID();
-                CurHeader.CmdID = Cmd_GNS_Register_Req;
+                CurHeader.CmdID = Cmd_LoginNotice;
                 CurHeader.SN = Header.SN;
                 CurHeader.ConnPos = ConnPos;
-                CurHeader.UserID = Header.UserID;
+                CurHeader.UserID = UserID;
                 CurHeader.PkgTime = time(NULL);
                 CurHeader.Ret = 0;
 
-                if(!CurReq.SerializeToArray(m_pSendBuff+CurHeader.GetHeaderLen(), XY_PKG_MAX_LEN-CurHeader.GetHeaderLen()))
-                {
-                    XF_LOG_WARN(0, 0, "pack err msg failed");
-                    return -1;
-                }
-
-                Send2Server(CurHeader, SERVER_GNS, TO_SRV, 0, CurReq);   
-            }
-            
-            break;
-        }
-        case Cmd_GNS_Register_Rsp:
-        {
-            mm::GNSRegisterRsp CurRsp;
-            if(!CurRsp.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
-            {
-                XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Header.CmdID);
-                return -1;
+                Send2Server(CurHeader, GROUP_CONN, TO_GRP_ALLNOME, 0, CurReq);
             }
 
             app::LoginRsp CurRsp2;
-            
-            uint64_t UserID = CurRsp.userid();
-            int ServerID = CurRsp.serverid();
-            unsigned int ConnPos = CurRsp.connpos();
-            int Result = CurRsp.ret();
-            
-            if(Result == 0 && ServerID == GetServerID())
-            {
-                std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(ConnPos);
-                if(iter == m_PosConnMap.end())
-                {
-                    return -1;
-                }
-                
-                iter->second->SetConnType(CONN_AUTH);
-                iter->second->SetUserID(UserID);
-
-                m_UserIDConnMap[UserID] = iter->second;
-                
-                CurRsp2.set_ret(0);
-            }
-            else
-            {
-                CurRsp2.set_ret(1);
-            }
+            CurRsp2.set_ret(Result);
             
             XYHeader CurHeader;
             CurHeader.PkgLen = CurRsp2.ByteSize() + CurHeader.GetHeadLen();
@@ -1586,9 +1646,47 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             
             break;
         }
-        case Cmd_Disconnect_Req:
+        case Cmd_LoginNotice:
         {
-            mm::DisconnectReq CurReq;
+            mm::LoginNotice CurReq;
+            if(!CurReq.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
+            {
+                XF_LOG_WARN(0, 0, "pkg parse failed, cmd=%0x", Header.CmdID);
+                return -1;
+            }
+
+            uint64_t UserID = CurReq.userid();
+            int ServerID = CurReq.serverid();
+            unsigned int ConnPos = CurReq.connpos();
+            time_t _time = CurReq.time();
+            
+            ShmGnsInfo* pCurGnsInfo = m_GnsInfoMap.Get(UserID);
+            if(pCurGnsInfo != NULL)
+            {
+                if(pCurGnsInfo->ServerID == GetServerID())
+                {
+                    std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(pCurGnsInfo->ConnPos);
+                    if(iter != m_PosConnMap.end() && iter->second->GetUserID() == UserID)
+                    {
+                        ReleaseConn(iter ,false);
+                    }
+                }
+
+                // 这里要求两台服务器的时间要同步
+                if(pCurGnsInfo->LastActiveTime < _time)
+                {
+                    pCurGnsInfo->ConnPos = ConnPos;
+                    pCurGnsInfo->ServerID = ServerID;
+                    pCurGnsInfo->Status = GNS_USER_STATUS_ACTIVE;
+                    pCurGnsInfo->LastActiveTime = time(NULL);
+                }
+            }
+
+            break;
+        }
+        case Cmd_Disconnect:
+        {
+            mm::LoginDisconnect CurReq;
             if(!CurReq.ParseFromArray(pCurBuffPos+Header.GetHeaderLen(), PkgLen-Header.GetHeaderLen()))
             {
                 XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Header.CmdID);
@@ -1611,8 +1709,6 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             }
 
             ReleaseConn(iter, false);
-
-            // 暂时不回复
             
             break;
         }
@@ -1627,11 +1723,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             unsigned int CurConnPos = Header.ConnPos;
             if(CurConnPos == 0)
             {
-                int Ret = GetUserConnPos(Header.UserID, CurConnPos);
-                if(Ret != 0)
-                {
-                    break;
-                }
+                break;
             }
 
             Send2Client(CurConnPos, m_pSendBuff, CurHeader.PkgLen);
@@ -1642,49 +1734,6 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
     
     return 0;
 }
-
-
-int CConn::GetUserConnPos(uint64_t UserID, unsigned int &ConnPos)
-{
-    std::map<unsigned long long, CConnInfo*>::iterator iter = m_UserIDConnMap.find(UserID);
-    if(iter == m_UserIDConnMap.end())
-    {
-        return -1;
-    }
-    ConnPos = iter->second->GetConnPos();
-
-    return 0;
-}
-
-
-
-int CConn::GetConnType(unsigned int ConnPos, unsigned int& Type)
-{
-    std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(ConnPos);
-    if(iter == m_PosConnMap.end())
-    {
-        return -1;
-    }
-    
-    Type = iter->second->GetConnType();
-
-    return 0;
-}
-
-
-int CConn::SetConnType(unsigned int ConnPos, unsigned int Type)
-{
-    std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(ConnPos);
-    if(iter == m_PosConnMap.end())
-    {
-        return -1;
-    }
-    
-    iter->second->SetConnType(Type);
-
-    return 0;
-}
-
 
 int CConn::SendStateMessage()
 {

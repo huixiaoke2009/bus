@@ -4,6 +4,7 @@
 #include <string>
 #include <map>
 #include <google/protobuf/message.h>
+#include "hash_list/hash_list_nolock.h"
 #include "shm_queue/shm_queue.h"
 #include "common.h"
 #include "../include/header.h"
@@ -25,6 +26,28 @@ typedef struct tagConnMeta
     unsigned short RemotePort;
 }ConnMeta;
 
+const char GNS_MEM_MAGIC[] = "THIS IS GNS MEM AAAAAAAAAAA";
+const short GNS_MEM_HEAD_SIZE = 256;
+typedef struct tagGnsMemHead
+{
+    char Magic[32];
+    unsigned int CurUserSN;
+}GnsMemHead;
+
+
+typedef struct tagShmGnsInfo
+{
+    uint64_t UserID;
+    int ServerID;
+    unsigned int ConnPos;
+    int Status;
+    time_t LastActiveTime;
+    
+    tagShmGnsInfo()
+    {
+        memset(this, 0x0, sizeof(tagShmGnsInfo));
+    }
+}ShmGnsInfo;
 
 class CConnInfo
 {
@@ -129,16 +152,13 @@ class CConn
     private:
         int AcceptConn(int ConnPos, int type);
         void CheckConn();
-        void ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap, bool bSend2Gns = true);
+        void ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap, bool bSend = true);
         int Send2Client(int CurConnPos,const char *pSendBuff, int SendBuffLen);
         int Send2Server(XYHeaderIn& Header, unsigned int DstID, char SendType, char Flag, const google::protobuf::Message& Message);
         int Send2Server(unsigned int DstID, char SendType, char Flag, const char* pCurBuff, int PkgLen);
         int SendErrMsg2Server(unsigned int DstID, unsigned int CmdID, int ErrCode);
         int ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
         int DealPkg(const char *pCurBuffPos, int RecvLen);
-        int GetUserConnPos(uint64_t UserID, unsigned int &ConnPos);
-        int GetConnType(unsigned int ConnPos, unsigned int& Type);
-        int SetConnType(unsigned int ConnPos, unsigned int Type);
         int SendStateMessage();
     private:
         // EPOLL句柄
@@ -149,7 +169,6 @@ class CConn
         unsigned int m_ConnPosCnt;
 
         std::map<unsigned int, CConnInfo*> m_PosConnMap;
-        std::map<unsigned long long, CConnInfo*> m_UserIDConnMap;
         std::map<unsigned int, CConnInfo*>::iterator m_itrCurCheckConn;
 
 
@@ -164,6 +183,11 @@ class CConn
 
         char *m_pProcessBuff;
         char *m_pSendBuff;
+
+        int m_MaxGnsNodeNum;
+        mmlib::CShareMem m_GnsMem;
+        GnsMemHead* m_pGnsHead;
+        mmlib::CHashListNoLock<uint64_t, ShmGnsInfo> m_GnsInfoMap;
 };
 
 #endif

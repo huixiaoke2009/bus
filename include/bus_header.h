@@ -5,7 +5,9 @@
 enum
 {
     TO_SRV = 0,
-    TO_GRP = 1,
+    TO_GRP_RND = 1,
+    TO_GRP_ALLNOME = 2,
+    TO_GRP_ALL = 3,
 };
 
 #pragma pack(1)

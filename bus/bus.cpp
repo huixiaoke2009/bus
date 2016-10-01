@@ -1204,7 +1204,23 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
     }
 
     memcpy(m_pProcessBuff, pCurBuffPos, PkgLen);
+
+    unsigned int DstID = CurHeader.DstID;
+    unsigned int SrcID = CurHeader.SrcID;
+    unsigned int CmdID = CurHeader.CmdID;
+    char SendType = CurHeader.SendType;
+    char Flag = CurHeader.Flag;
+    time_t PkgTime = CurHeader.PkgTime;
     
+    XF_LOG_DEBUG(0, 0, "%d|%d|%d|%d|%0x|%s", SrcID, DstID, SendType, Flag, CmdID, CStrTool::TimeString(PkgTime));
+
+    if(SendType != TO_SRV)
+    {
+        //相当于不要这个包了
+        XF_LOG_WARN(0, 0, "SendType is not TO_SRV:%d,%d|%d|%0x", TO_SRV, SrcID, DstID, CmdID);
+        return PkgLen;
+    }
+
     // ------------------------- bus内部协议 begin ---------------------
     if(CurHeader.CmdID == Cmd_Heartbeat)
     {
@@ -1253,21 +1269,6 @@ int CBus::ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int
 
     // ------------------------- bus内部协议 end ---------------------
     
-    unsigned int DstID = CurHeader.DstID;
-    unsigned int SrcID = CurHeader.SrcID;
-    unsigned int CmdID = CurHeader.CmdID;
-    char SendType = CurHeader.SendType;
-    char Flag = CurHeader.Flag;
-    time_t PkgTime = CurHeader.PkgTime;
-    
-    XF_LOG_DEBUG(0, 0, "%d|%d|%d|%d|%0x|%s", SrcID, DstID, SendType, Flag, CmdID, CStrTool::TimeString(PkgTime));
-
-    if(SendType != TO_SRV)
-    {
-        //相当于不要这个包了
-        XF_LOG_WARN(0, 0, "SendType is not TO_SRV:%d,%d|%d|%0x", TO_SRV, SrcID, DstID, CmdID);
-        return PkgLen;
-    }
     
     map<unsigned int, ServerInfo>::iterator iter = m_mapSvrInfo.find(DstID);
     if(iter == m_mapSvrInfo.end())
@@ -1367,6 +1368,7 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
     
     XF_LOG_DEBUG(0, 0, "%d|%d|%d|%d|%0x", SrcID, DstID, SendType, Flag, CmdID);
 
+    /*************************** 特殊协议处理BEGIN ******************************/
     if(CurHeader.CmdID == Cmd_StateChange)
     {
         if(SendType != TO_SRV)
@@ -1416,8 +1418,10 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
 
         return 0;
     }
-
-    if(SendType == TO_GRP)
+    /*************************** 特殊协议处理END  ******************************/
+    vector<unsigned int> vctDstID;
+    
+    if(SendType == TO_GRP_RND)
     {
         int Rand = 0;
         map<unsigned int, vector<unsigned int> >::iterator iter_map = m_mapGrpInfo.find(DstID);
@@ -1440,6 +1444,40 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
         
         XF_LOG_DEBUG(0, 0, "Size, Rand, DstID, %d|%d|%d", Size, Rand, DstID);
 
+        vctDstID.push_back(DstID);
+    }
+    else if(SendType == TO_GRP_ALLNOME || SendType == TO_GRP_ALL)
+    {
+        map<unsigned int, vector<unsigned int> >::iterator iter_map = m_mapGrpInfo.find(DstID);
+        if(iter_map == m_mapGrpInfo.end())
+        {
+            XF_LOG_WARN(0, 0, "Unknow DstID %d, %d|%0x", DstID, SrcID, CmdID);
+            return -1;
+        }
+
+        const vector<unsigned int>& iter_vct = iter_map->second;
+
+        for(int i = 0; i < (int)iter_vct.size(); i++)
+        {
+            if(iter_vct[i] == SrcID && SendType == TO_GRP_ALLNOME)
+            {
+                // 不处理这个DstID
+            }
+            else
+            {
+                vctDstID.push_back(DstID);
+            }
+        }
+    }
+    else
+    {
+        vctDstID.push_back(DstID);
+    }
+
+    for(int i = 0; i < (int)vctDstID.size(); i++)
+    {
+        DstID = vctDstID[i];
+        
         CurHeader.DstID = DstID;
         CurHeader.SendType = TO_SRV;
         if(CurHeader.PkgTime == 0)
@@ -1447,63 +1485,54 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
             CurHeader.PkgTime = time(NULL);
         }
         CurHeader.Write(pCurBuffPos);
-    }
-    else
-    {
-        if(CurHeader.PkgTime == 0)
+
+        map<unsigned int, ServerInfo>::iterator iter = m_mapSvrInfo.find(DstID);
+        if(iter == m_mapSvrInfo.end())
         {
-            CurHeader.PkgTime = time(NULL);
-            CurHeader.Write(pCurBuffPos);
+            XF_LOG_WARN(0, 0, "Unknow DstID %d, %d|%0x", DstID, SrcID, CmdID);
+            return -1;
         }
-    }
-    
-    map<unsigned int, ServerInfo>::iterator iter = m_mapSvrInfo.find(DstID);
-    if(iter == m_mapSvrInfo.end())
-    {
-        XF_LOG_WARN(0, 0, "Unknow DstID %d, %d|%0x", DstID, SrcID, CmdID);
-        return -1;
-    }
-    
-    const ServerInfo& Info = iter->second;
-    if(Info.ClusterID == GetClusterID())
-    {
-        if(Info.pQueue != NULL)
+        
+        const ServerInfo& Info = iter->second;
+        if(Info.ClusterID == GetClusterID())
         {
-            Ret = Info.pQueue->InQueue(pCurBuffPos, PkgLen);
-            if(Ret == Info.pQueue->E_SHM_QUEUE_FULL)
+            if(Info.pQueue != NULL)
             {
-                XF_LOG_WARN(0, 0, "ShmQueue is full, %0x|%d", Info.QueueKey, Info.QueueSize);
-                return -1;
-            }
-            else if(Ret != 0)
-            {
-                XF_LOG_WARN(0, 0, "InQueue failed, %d|%0x|%d", Ret, Info.QueueKey, Info.QueueSize);
-                return -1;
+                Ret = Info.pQueue->InQueue(pCurBuffPos, PkgLen);
+                if(Ret == Info.pQueue->E_SHM_QUEUE_FULL)
+                {
+                    XF_LOG_WARN(0, 0, "ShmQueue is full, %0x|%d", Info.QueueKey, Info.QueueSize);
+                    return -1;
+                }
+                else if(Ret != 0)
+                {
+                    XF_LOG_WARN(0, 0, "InQueue failed, %d|%0x|%d", Ret, Info.QueueKey, Info.QueueSize);
+                    return -1;
+                }
+                else
+                {
+                    XF_LOG_TRACE(0, 0, "InQueue success, %d|%0x|%d", Ret, Info.QueueKey, Info.QueueSize);
+                }
             }
             else
             {
-                XF_LOG_TRACE(0, 0, "InQueue success, %d|%0x|%d", Ret, Info.QueueKey, Info.QueueSize);
+                XF_LOG_WARN(0, 0, "Queqe is null, %d|%0x|%d", Info.ClusterID, Info.QueueKey, Info.QueueSize);
             }
         }
         else
         {
-            XF_LOG_WARN(0, 0, "Queqe is null, %d|%0x|%d", Info.ClusterID, Info.QueueKey, Info.QueueSize);
-        }
-    }
-    else
-    {
-        map<unsigned int, ClusterInfo>::iterator iter2 = m_mapClusterInfo.find(Info.ClusterID);
-        if(iter2 != m_mapClusterInfo.end())
-        {
-            Ret = Send2Cluster(iter2->second, pCurBuffPos, PkgLen);
-            if(Ret != 0)
+            map<unsigned int, ClusterInfo>::iterator iter2 = m_mapClusterInfo.find(Info.ClusterID);
+            if(iter2 != m_mapClusterInfo.end())
             {
-                XF_LOG_WARN(0, 0, "Send2Cluster failed, %d", Info.ClusterID);
-                return -1;
+                Ret = Send2Cluster(iter2->second, pCurBuffPos, PkgLen);
+                if(Ret != 0)
+                {
+                    XF_LOG_WARN(0, 0, "Send2Cluster failed, %d", Info.ClusterID);
+                    return -1;
+                }
             }
         }
     }
-    
     return 0;
 }
 

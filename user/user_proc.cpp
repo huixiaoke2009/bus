@@ -427,6 +427,7 @@ int CUser::DealPkg(const char *pCurBuffPos, int PkgLen)
 
             ShmUserInfo Info;
             Info.UserID = UserID;
+            Info.LastActiveTime = time(NULL);
             snprintf(Info.NickName, MAX_NAME_LENGTH, "%s", strNickName.c_str());
             Info.Level = 0;
             Info.VipLevel = 0;

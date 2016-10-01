@@ -355,6 +355,7 @@ int CLoaderUser::UserProtoString2Struct(ShmUserInfo &CurUserInfo, const std::str
 
     CurUserInfo.UserID = User.userid();
     CurUserInfo.Status = USER_STATUS_LOADED;
+    CurUserInfo.LastActiveTime = time(NULL);
     snprintf(CurUserInfo.NickName, sizeof(CurUserInfo.NickName), User.nickname().c_str());
     CurUserInfo.Level = User.level();
     CurUserInfo.VipLevel = User.viplevel();

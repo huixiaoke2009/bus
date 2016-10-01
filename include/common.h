@@ -28,17 +28,14 @@ const int AUTH_TABLE_NUM = 2;            // auth分库分表的表数量
 // 服务器与组
 const int GROUP_CONN = 100;
 const int GROUP_AUTH = 200;
-const int GROUP_GNS = 300;
 const int GROUP_USER = 400;
 
-const int SERVER_GNS = 301; //目前的设定是GNS只有一台
 const int SERVER_USER_BEGIN = 400;
 
 // 命令字前缀
 const unsigned int CMD_PREFIX_SYS = 0x0000;
 const unsigned int CMD_PREFIX_CONN = 0x0001;
 const unsigned int CMD_PREFIX_AUTH = 0x0002;
-const unsigned int CMD_PREFIX_GNS = 0x0003;
 const unsigned int CMD_PREFIX_USER = 0x0004;
 
 

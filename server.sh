@@ -12,7 +12,6 @@ stop()
     killall logsvr
     killall conn
     killall auth
-    killall gns
     killall user
 }
 
