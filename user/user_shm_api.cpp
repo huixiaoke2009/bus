@@ -214,7 +214,7 @@ int CUserShmApi::RemoveUserInfoWhenInValid(uint64_t UserID)
     Ret = m_UserInfoMap.Remove(UserID);
     if(Ret != 0)
     {
-        XF_LOG_WARN(0, UserID, "Remove failed, Ret=%d", Ret);
+        XF_LOG_WARN(0, UserID, "UserID = %lu Remove failed, Ret=%d", UserID, Ret);
         return -1;
     }
 

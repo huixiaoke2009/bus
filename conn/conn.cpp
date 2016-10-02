@@ -329,6 +329,8 @@ int CConnInfo::SendRemainData()
     return 0;
 }
 
+CConn *CConn::m_pSelf = NULL;
+
 
 CConn::CConn()
 {
@@ -337,8 +339,11 @@ CConn::CConn()
     m_EpollFD = -1;
     m_ConnPosCnt = 0;
 
+    m_pSelf = this;
+
     m_PosConnMap.clear();
     m_itrCurCheckConn = m_PosConnMap.begin();
+    m_CheckConnPos = 0;
     m_TimeOut = 0;
 
     m_pProcessBuff = NULL;
@@ -701,6 +706,19 @@ int CConn::Init(const char *pConfFile)
         printf("INFO:gns info map verify succ\n");
     }
 
+    vector<uint64_t> vctUserID;
+    for(int i = 0; i < m_MaxGnsNodeNum; i++)
+    {
+        m_GnsInfoMap.ProcessAll(i, MemFullCallBackAll, &vctUserID);
+    }
+
+    for(int i = 0; i < (int)vctUserID.size(); i++)
+    {
+        
+    }
+
+    printf("svr init success\n");
+    
     return 0;
 }
 
@@ -1138,6 +1156,8 @@ int CConn::Run()
 
         // 对连接进行检查扫描
         CheckConn();
+
+        CheckValid();
     }
 
     return 0;
@@ -1679,7 +1699,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             else
             {
                 // 这里要求两台服务器的时间要同步
-                if(pCurGnsInfo->LastActiveTime < _time)
+                if(pCurGnsInfo->LastActiveTime < (uint64_t)_time)
                 {
                     if(pCurGnsInfo->ServerID == GetServerID())
                     {
@@ -1716,7 +1736,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             {
                 if(pCurGnsInfo->ServerID == GetServerID())
                 {
-                    if(pCurGnsInfo->LastActiveTime < _time)
+                    if(pCurGnsInfo->LastActiveTime < (uint64_t)_time)
                     {
                         std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(pCurGnsInfo->ConnPos);
                         if(iter == m_PosConnMap.end())
@@ -1797,24 +1817,35 @@ int CConn::SendStateMessage()
 }
 
 
-void CConn::MemFullCallBack(uint64_t UserID, ShmGnsInfo &CurGnsInfo, void* p)
+void CConn::MemFullCallBackAll(uint64_t UserID, ShmGnsInfo &CurGnsInfo, void* p)
 {
-    time_t nowTime= time(NULL);
-    if(CurGnsInfo.Status == GNS_USER_STATUS_UNACTIVE && (uint64_t)(nowTime - CONN_INVALID_TIME) > CurGnsInfo.LastActiveTime)
+    if(CurGnsInfo.ServerID == m_pSelf->GetServerID() && CurGnsInfo.Status == GNS_USER_STATUS_ACTIVE)
     {
         vector<uint64_t>* pVct = (vector<uint64_t>*) p;
         pVct->push_back(UserID);
     }
 }
 
+
+void CConn::MemFullCallBack(uint64_t UserID, ShmGnsInfo &CurGnsInfo, void* p)
+{
+    time_t nowTime= time(NULL);
+    if(CurGnsInfo.Status == GNS_USER_STATUS_UNACTIVE && (uint64_t)(nowTime - CONN_INVALID_TIME) > CurGnsInfo.LastActiveTime)
+    {
+        int Ret = m_pSelf->m_GnsInfoMap.Remove(UserID);
+        if(Ret != 0)
+        {
+            XF_LOG_WARN(0, UserID, "m_GnsInfoMap %ld Remove failed, Ret=%d", UserID, Ret);
+        }
+
+        XF_LOG_INFO(0, UserID, "m_GnsInfoMap %ld Remove success", UserID);
+    }
+}
+
 int CConn::CheckValid()
 {
-    vector<uint64_t> vctUserID;
-    m_GnsInfoMap.ProcessAll(m_CheckConnPos, MemFullCallBack, &vctUserID);
-    for(int i = 0; i < (int)vctUserID.size(); i++)
-    {
-        m_GnsInfoMap.Remove(vctUserID[i]);
-    }
-    
+    m_GnsInfoMap.ProcessAll(m_CheckConnPos, MemFullCallBack, NULL); 
     m_CheckConnPos = (m_CheckConnPos+1)%m_MaxGnsNodeNum;
+
+    return 0;
 }

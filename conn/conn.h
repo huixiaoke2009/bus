@@ -41,7 +41,7 @@ typedef struct tagShmGnsInfo
     int ServerID;
     unsigned int ConnPos;
     int Status;
-    time_t LastActiveTime;
+    uint64_t LastActiveTime;
     
     tagShmGnsInfo()
     {
@@ -138,6 +138,7 @@ class CConnInfo
         std::string m_RemainRecvData;
 };
 
+class CConn;
 class CConn
 {
     public:
@@ -147,8 +148,8 @@ class CConn
         int Init(const char *pConfFile);
         int Run();
         int GetServerID(){return m_ServerID;}
-        const char *GetErrMsg() { return m_szErrMsg;};
-
+        const char* GetErrMsg(){return m_szErrMsg;}
+        static CConn* m_pSelf;
     private:
         int AcceptConn(int ConnPos, int type);
         void CheckConn();
@@ -160,8 +161,10 @@ class CConn
         int ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
         int DealPkg(const char *pCurBuffPos, int RecvLen);
         int SendStateMessage();
+        static void MemFullCallBackAll(uint64_t UserID, ShmGnsInfo &CurGnsInfo, void* p);
         static void MemFullCallBack(uint64_t UserID, ShmGnsInfo &CurGnsInfo, void* p);
         int CheckValid();
+        
     private:
         // EPOLL句柄
         int m_EpollFD;
