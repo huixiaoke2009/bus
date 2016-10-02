@@ -33,7 +33,6 @@ class CUser
     private:
         unsigned int m_ServerID;
         int m_StateTime;
-        int m_CheckTime;
         
         mmlib::CShmQueue m_SendQueue;
         mmlib::CShmQueue m_RecvQueue;

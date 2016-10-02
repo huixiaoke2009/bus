@@ -65,7 +65,6 @@ CUser::CUser()
 {
     m_ServerID = 0;
     m_StateTime = 0;
-    m_CheckTime = 0;
     m_pSendBuff = NULL;
 }
 
@@ -120,7 +119,6 @@ int CUser::Init(const char *pConfFile)
         IniFile.GetInt("USER", "ServerID", 0, (int*)&m_ServerID);
         IniFile.GetString("USER", "BusConfPath", "", BusConfPath, sizeof(BusConfPath));
         IniFile.GetInt("USER", "StateTime", 0, &m_StateTime);
-        IniFile.GetInt("USER", "CheckTime", 0, &m_CheckTime);
         IniFile.GetInt("USER", "LoaderSendShmKey", 0, &LoaderSendShmKey);
         IniFile.GetInt("USER", "LoaderSendShmSize", 0, &LoaderSendShmSize);
         IniFile.GetInt("USER", "LoaderRecvShmKey", 0, &LoaderRecvShmKey);
@@ -290,8 +288,7 @@ int CUser::Run()
     int RecvLen = XY_MAXBUFF_LEN;
 
     time_t LastStateTime = time(NULL);
-    time_t LastCheckTime = time(NULL);
-    
+
     while(!StopFlag)
     {
         int EmptyFlag = 1;  //没有数据标志位
@@ -378,12 +375,7 @@ int CUser::Run()
             SendStateMessage();
         }
 
-        if(NowTime - LastCheckTime >= m_CheckTime)
-        {
-            LastCheckTime = NowTime;
-            CheckValid();
-        }
-        
+        CheckValid();
 
         if(EmptyFlag)
         {
