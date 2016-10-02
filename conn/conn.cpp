@@ -910,6 +910,8 @@ void CConn::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInf
         {
             pCurGnsInfo->Status = GNS_USER_STATUS_UNACTIVE;
             pCurGnsInfo->LastActiveTime = time(NULL);
+
+            XF_LOG_INFO(0, UserID, "m_GnsInfoMap modify success");
         }
         
         if(bSend)
@@ -1727,6 +1729,8 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                         XF_LOG_WARN(0, UserID, "m_GnsInfoMap Insert failed, Ret=%d", Ret);
                         //return -1;
                     }
+
+                    XF_LOG_INFO(0, UserID, "m_GnsInfoMap Insert success");
                 }
                 else
                 {
@@ -1746,6 +1750,8 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                         pCurGnsInfo->ServerID = ServerID;
                         pCurGnsInfo->Status = GNS_USER_STATUS_ACTIVE;
                         pCurGnsInfo->LastActiveTime = time(NULL);
+
+                        XF_LOG_INFO(0, UserID, "m_GnsInfoMap modify success");
                     }
                 }
             }
@@ -1780,6 +1786,16 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                             }
                             
                             ReleaseConn(iter, false);
+                        }
+                    }
+                    else
+                    {
+                        if(pCurGnsInfo->LastActiveTime < (uint64_t)_time)
+                        {
+                            pCurGnsInfo->Status = GNS_USER_STATUS_UNACTIVE;
+                            pCurGnsInfo->LastActiveTime = time(NULL);
+
+                            XF_LOG_INFO(0, UserID, "m_GnsInfoMap modify success");
                         }
                     }
                 }
