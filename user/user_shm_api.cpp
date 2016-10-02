@@ -267,12 +267,9 @@ void CUserShmApi::MemFullCallBack(uint64_t UserID, ShmUserInfo &CurUserInfo, voi
 
 int CUserShmApi::CheckUserIsValid(vector<uint64_t>* pVct)
 {
-    if(pVct->size() == 0)
-    {
-        LOCK_INDEX(CFileLock::FILE_LOCK_WRITE, m_CheckUserPos);
-        m_UserInfoMap.ProcessAll(m_CheckUserPos, MemFullCallBack, (void*)pVct);
-        m_CheckUserPos = (m_CheckUserPos+1)%m_MaxUserNodeNum;
-    }
+    LOCK_INDEX(CFileLock::FILE_LOCK_WRITE, m_CheckUserPos);
+    m_UserInfoMap.ProcessAll(m_CheckUserPos, MemFullCallBack, (void*)pVct);
+    m_CheckUserPos = (m_CheckUserPos+1)%m_MaxUserNodeNum;
 
     return 0;
 }

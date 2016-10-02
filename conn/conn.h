@@ -160,6 +160,8 @@ class CConn
         int ProcessPkg(const char *pCurBuffPos, int RecvLen, std::map<unsigned int, CConnInfo*>::iterator &pConnInfoMap);
         int DealPkg(const char *pCurBuffPos, int RecvLen);
         int SendStateMessage();
+        static void MemFullCallBack(uint64_t UserID, ShmGnsInfo &CurGnsInfo, void* p);
+        int CheckValid();
     private:
         // EPOLL句柄
         int m_EpollFD;
@@ -170,7 +172,7 @@ class CConn
 
         std::map<unsigned int, CConnInfo*> m_PosConnMap;
         std::map<unsigned int, CConnInfo*>::iterator m_itrCurCheckConn;
-
+        int m_CheckConnPos;
 
         //连接超时时间（指定时间内没有数据包，将视为超时），单位：秒
         int m_TimeOut;

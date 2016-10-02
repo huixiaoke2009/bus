@@ -875,6 +875,7 @@ void CConn::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInf
             // 通知其它CONN连接已断开
             mm::LoginDisconnect CurReq;
             CurReq.set_userid(UserID);
+            CurReq.set_time(time(NULL));
 
             XYHeaderIn Header;
             Header.SrcID = GetServerID();
@@ -1708,19 +1709,23 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
             }
             
             uint64_t UserID = CurReq.userid();
-
+            time_t _time = CurReq.time();
+            
             ShmGnsInfo* pCurGnsInfo = m_GnsInfoMap.Get(UserID);
             if(pCurGnsInfo != NULL)
             {
                 if(pCurGnsInfo->ServerID == GetServerID())
                 {
-                    std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(pCurGnsInfo->ConnPos);
-                    if(iter == m_PosConnMap.end())
+                    if(pCurGnsInfo->LastActiveTime < _time)
                     {
-                        return -1;
+                        std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(pCurGnsInfo->ConnPos);
+                        if(iter == m_PosConnMap.end())
+                        {
+                            return -1;
+                        }
+                        
+                        ReleaseConn(iter, false);
                     }
-                    
-                    ReleaseConn(iter, false);
                 }
             }
             
@@ -1791,3 +1796,25 @@ int CConn::SendStateMessage()
     return 0;
 }
 
+
+void CConn::MemFullCallBack(uint64_t UserID, ShmGnsInfo &CurGnsInfo, void* p)
+{
+    time_t nowTime= time(NULL);
+    if(CurGnsInfo.Status == GNS_USER_STATUS_UNACTIVE && (uint64_t)(nowTime - CONN_INVALID_TIME) > CurGnsInfo.LastActiveTime)
+    {
+        vector<uint64_t>* pVct = (vector<uint64_t>*) p;
+        pVct->push_back(UserID);
+    }
+}
+
+int CConn::CheckValid()
+{
+    vector<uint64_t> vctUserID;
+    m_GnsInfoMap.ProcessAll(m_CheckConnPos, MemFullCallBack, &vctUserID);
+    for(int i = 0; i < (int)vctUserID.size(); i++)
+    {
+        m_GnsInfoMap.Remove(vctUserID[i]);
+    }
+    
+    m_CheckConnPos = (m_CheckConnPos+1)%m_MaxGnsNodeNum;
+}

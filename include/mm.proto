@@ -16,6 +16,7 @@ message ErrorMsg
 message LoginDisconnect
 {
     required uint64 userid = 1;
+    required uint64 time = 2;
 }
 
 message LoginNotice
