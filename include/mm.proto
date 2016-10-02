@@ -13,18 +13,22 @@ message ErrorMsg
 
 /********************* CONN部分 **********************/
 // 通知连接层断开某条链接
-message LoginDisconnect
-{
-    required uint64 userid = 1;
-    required uint64 time = 2;
-}
-
-message LoginNotice
+message LoginData
 {
     required uint64 userid = 1;
     required int32 serverid = 2;
     required uint32 connpos = 3;
     required uint64 time = 4;
+}
+
+message LoginDisconnect
+{
+    repeated LoginData data = 1;
+}
+
+message LoginNotice
+{
+    repeated LoginData data = 1;
 }
 
 /********************* AUTH部分 **********************/

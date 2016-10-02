@@ -712,9 +712,33 @@ int CConn::Init(const char *pConfFile)
         m_GnsInfoMap.ProcessAll(i, MemFullCallBackAll, &vctUserID);
     }
 
+    mm::LoginDisconnect CurReq;
+    int j = 0;
     for(int i = 0; i < (int)vctUserID.size(); i++)
     {
+        mm::LoginData data;
+        data.set_userid(vctUserID[i]);
+        data.set_connpos(0);
+        data.set_serverid(0);
+        data.set_time(time(NULL));
+        CurReq.add_data()->CopyFrom(data);
         
+        j++;
+        if(j > 1000 || i == (int)vctUserID.size()-1)
+        {
+            j = 0;
+
+            XYHeaderIn Header;
+            Header.SrcID = GetServerID();
+            Header.CmdID = Cmd_Disconnect;
+            Header.SN = 0;
+            Header.ConnPos = 0;
+            Header.UserID = 0;
+            Header.PkgTime = time(NULL);
+            Header.Ret = 0;
+            
+            Send2Server(Header, GROUP_CONN, TO_GRP_ALLNOME, 0, CurReq);
+        }
     }
 
     printf("svr init success\n");
@@ -892,9 +916,13 @@ void CConn::ReleaseConn(std::map<unsigned int, CConnInfo*>::iterator &itrConnInf
         {
             // 通知其它CONN连接已断开
             mm::LoginDisconnect CurReq;
-            CurReq.set_userid(UserID);
-            CurReq.set_time(time(NULL));
-
+            mm::LoginData data;
+            data.set_userid(UserID);
+            data.set_connpos(0);
+            data.set_serverid(0);
+            data.set_time(time(NULL));
+            CurReq.add_data()->CopyFrom(data);
+            
             XYHeaderIn Header;
             Header.SrcID = GetServerID();
             Header.CmdID = Cmd_Disconnect;
@@ -1626,10 +1654,12 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 
                 // 成功,通知其他CONN
                 mm::LoginNotice CurReq;
-                CurReq.set_userid(UserID);
-                CurReq.set_serverid(GetServerID());
-                CurReq.set_connpos(ConnPos);
-                CurReq.set_time(nowTime);
+                mm::LoginData data;
+                data.set_userid(UserID);
+                data.set_serverid(GetServerID());
+                data.set_connpos(ConnPos);
+                data.set_time(nowTime);
+                CurReq.add_data()->CopyFrom(data);
                 
                 XYHeaderIn CurHeader;
                 CurHeader.SrcID = GetServerID();
@@ -1674,49 +1704,52 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 return -1;
             }
 
-            uint64_t UserID = CurReq.userid();
-            int ServerID = CurReq.serverid();
-            unsigned int ConnPos = CurReq.connpos();
-            time_t _time = CurReq.time();
-            
-            ShmGnsInfo* pCurGnsInfo = m_GnsInfoMap.Get(UserID);
-            if(pCurGnsInfo == NULL)
+            for(int j = 0; j < CurReq.data_size(); j++)
             {
-                ShmGnsInfo Info;
-                Info.UserID = UserID;
-                Info.ConnPos = ConnPos;
-                Info.ServerID = ServerID;
-                Info.Status = GNS_USER_STATUS_ACTIVE;
-                Info.LastActiveTime = time(NULL);
+                uint64_t UserID = CurReq.data(j).userid();
+                int ServerID = CurReq.data(j).serverid();
+                unsigned int ConnPos = CurReq.data(j).connpos();
+                time_t _time = CurReq.data(j).time();
+                
+                ShmGnsInfo* pCurGnsInfo = m_GnsInfoMap.Get(UserID);
+                if(pCurGnsInfo == NULL)
+                {
+                    ShmGnsInfo Info;
+                    Info.UserID = UserID;
+                    Info.ConnPos = ConnPos;
+                    Info.ServerID = ServerID;
+                    Info.Status = GNS_USER_STATUS_ACTIVE;
+                    Info.LastActiveTime = time(NULL);
 
-                int Ret = m_GnsInfoMap.Insert(UserID, Info);
-                if(Ret != 0)
-                {
-                    XF_LOG_WARN(0, UserID, "m_GnsInfoMap Insert failed, Ret=%d", Ret);
-                    //return -1;
-                }
-            }
-            else
-            {
-                // 这里要求两台服务器的时间要同步
-                if(pCurGnsInfo->LastActiveTime < (uint64_t)_time)
-                {
-                    if(pCurGnsInfo->ServerID == GetServerID())
+                    int Ret = m_GnsInfoMap.Insert(UserID, Info);
+                    if(Ret != 0)
                     {
-                        std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(pCurGnsInfo->ConnPos);
-                        if(iter != m_PosConnMap.end() && iter->second->GetUserID() == UserID)
-                        {
-                            ReleaseConn(iter ,false);
-                        }
+                        XF_LOG_WARN(0, UserID, "m_GnsInfoMap Insert failed, Ret=%d", Ret);
+                        //return -1;
                     }
-                    
-                    pCurGnsInfo->ConnPos = ConnPos;
-                    pCurGnsInfo->ServerID = ServerID;
-                    pCurGnsInfo->Status = GNS_USER_STATUS_ACTIVE;
-                    pCurGnsInfo->LastActiveTime = time(NULL);
+                }
+                else
+                {
+                    // 这里要求两台服务器的时间要同步
+                    if(pCurGnsInfo->LastActiveTime < (uint64_t)_time)
+                    {
+                        if(pCurGnsInfo->ServerID == GetServerID())
+                        {
+                            std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(pCurGnsInfo->ConnPos);
+                            if(iter != m_PosConnMap.end() && iter->second->GetUserID() == UserID)
+                            {
+                                ReleaseConn(iter ,false);
+                            }
+                        }
+                        
+                        pCurGnsInfo->ConnPos = ConnPos;
+                        pCurGnsInfo->ServerID = ServerID;
+                        pCurGnsInfo->Status = GNS_USER_STATUS_ACTIVE;
+                        pCurGnsInfo->LastActiveTime = time(NULL);
+                    }
                 }
             }
-
+            
             break;
         }
         case Cmd_Disconnect:
@@ -1727,28 +1760,31 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 XF_LOG_WARN(0, 0, "pkg parse failed, cmdid=%0x", Header.CmdID);
                 return -1;
             }
-            
-            uint64_t UserID = CurReq.userid();
-            time_t _time = CurReq.time();
-            
-            ShmGnsInfo* pCurGnsInfo = m_GnsInfoMap.Get(UserID);
-            if(pCurGnsInfo != NULL)
+
+            for(int j = 0; j < CurReq.data_size(); j++)
             {
-                if(pCurGnsInfo->ServerID == GetServerID())
+                uint64_t UserID = CurReq.data(j).userid();
+                time_t _time = CurReq.data(j).time();
+                
+                ShmGnsInfo* pCurGnsInfo = m_GnsInfoMap.Get(UserID);
+                if(pCurGnsInfo != NULL)
                 {
-                    if(pCurGnsInfo->LastActiveTime < (uint64_t)_time)
+                    if(pCurGnsInfo->ServerID == GetServerID())
                     {
-                        std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(pCurGnsInfo->ConnPos);
-                        if(iter == m_PosConnMap.end())
+                        if(pCurGnsInfo->LastActiveTime < (uint64_t)_time)
                         {
-                            return -1;
+                            std::map<unsigned int, CConnInfo*>::iterator iter = m_PosConnMap.find(pCurGnsInfo->ConnPos);
+                            if(iter == m_PosConnMap.end())
+                            {
+                                return -1;
+                            }
+                            
+                            ReleaseConn(iter, false);
                         }
-                        
-                        ReleaseConn(iter, false);
                     }
                 }
             }
-            
+
             break;
         }
         default:
