@@ -19,8 +19,8 @@ const int MAX_EMAIL_LENGTH = 64;
 const int MAX_USER_SERVER_NUM = 2;  // user服务器数量，决定某个userid去哪台服务器处理
 const int USER_DATABASE_NUM = 2;
 const int USER_TABLE_NUM = 2;
-const int USER_INVALID_TIME = 10;
-const int CONN_INVALID_TIME = 10;
+const int USER_INVALID_TIME = 86400;
+const int CONN_INVALID_TIME = 86400;
 
 // auth常量
 const int AUTH_DATABASE_NUM = 2;    // auth分库分表的库数量
