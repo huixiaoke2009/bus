@@ -27,6 +27,9 @@ const unsigned int Cmd_StateChange = 0x00000004;
 const unsigned int Cmd_Disconnect = 0x00010003;
 // 登录通知
 const unsigned int Cmd_LoginNotice = 0x00010004;
+// 同步
+const unsigned int Cmd_LoginSync_Req = 0x00010005;
+const unsigned int Cmd_LoginSync_Rsp = 0x00010006;
 
 /******************* AUTH模块 *******************/
 // 注册,app使用

@@ -49,6 +49,20 @@ typedef struct tagShmGnsInfo
     }
 }ShmGnsInfo;
 
+typedef struct tagLoginData
+{
+    uint64_t UserID;
+    int ServerID;
+    unsigned int ConnPos;
+    time_t LastActiveTime;
+
+    tagLoginData()
+    {
+        memset(this, 0x0, sizeof(tagLoginData));
+    }
+    
+}LoginData;
+
 class CConnInfo
 {
     public:

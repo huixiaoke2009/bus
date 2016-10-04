@@ -31,6 +31,15 @@ message LoginNotice
     repeated LoginData data = 1;
 }
 
+message LoginSyncReq
+{
+    required int32 serverid = 1;
+}
+
+message LoginSyncRsp
+{
+    repeated LoginData data = 1;
+}
 /********************* AUTH部分 **********************/
 // 注册
 message AuthRegisterReq

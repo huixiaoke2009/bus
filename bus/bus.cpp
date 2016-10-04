@@ -1421,7 +1421,7 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
     /*************************** 特殊协议处理END  ******************************/
     vector<unsigned int> vctDstID;
     
-    if(SendType == TO_GRP_RND)
+    if(SendType == TO_GRP_RND || SendType == TO_GRP_RNDNOME)
     {
         int Rand = 0;
         map<unsigned int, vector<unsigned int> >::iterator iter_map = m_mapGrpInfo.find(DstID);
@@ -1432,7 +1432,21 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
         }
 
         const vector<unsigned int>& iter_vct = iter_map->second;
-        int Size = iter_vct.size();
+        vector<unsigned int> vctServerID;
+        for(int k = 0; k < (int)iter_vct.size(); k++)
+        {
+            
+            if(iter_vct[k] == SrcID && SendType == TO_GRP_RNDNOME)
+            {
+                // 不处理这个DstID
+            }
+            else
+            {
+                vctServerID.push_back(iter_vct[k]);
+            }
+        }
+
+        int Size = vctServerID.size();
         if(Size == 0)
         {
             XF_LOG_WARN(0, 0, "Group %d do not have any server", DstID);
@@ -1440,7 +1454,7 @@ int CBus::ForwardMsg(char *pCurBuffPos, int RecvLen)
         }
         
         Rand = CRandomTool::Instance()->Get(0, Size);
-        DstID = iter_vct[Rand];
+        DstID = vctServerID[Rand];
         
         XF_LOG_DEBUG(0, 0, "Size, Rand, DstID, %d|%d|%d", Size, Rand, DstID);
 
