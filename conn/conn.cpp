@@ -27,9 +27,6 @@ using namespace std;
 const unsigned int LISTEN_SOCK_CPOS_MIN = 100;    //100-199的ConnPos用于监听的Socket
 const unsigned int LISTEN_SOCK_CPOS_MAX = 199;
 
-const unsigned int WLISTEN_SOCK_CPOS_MIN = 200;    //200-299的ConnPos用于webpcl监听的Socket
-const unsigned int WLISTEN_SOCK_CPOS_MAX = 299;
-
 const unsigned int CLIENT_SOCK_CPOS_MIN = 500;    //500以上才是客户端连接上来的Socket
 
 const unsigned int MAX_EPOLL_RET_EVENTS = 1024;
@@ -889,11 +886,16 @@ void CConn::CheckConn()
         return;
     }
 
-    if ((m_itrCurCheckConn->first >= WLISTEN_SOCK_CPOS_MIN) && (m_itrCurCheckConn->first <= WLISTEN_SOCK_CPOS_MAX))
+    uint64_t UserID = m_itrCurCheckConn->second->GetUserID();
+    if(UserID != 0)
     {
-        m_itrCurCheckConn++;
-        return;
+        ShmGnsInfo* pCurGnsInfo = m_GnsInfoMap.Get(UserID);
+        if(pCurGnsInfo == NULL || pCurGnsInfo->Status != GNS_USER_STATUS_ACTIVE)
+        {
+            XF_LOG_ERROR(0, 0, "some error happen!!!Info:%ld", UserID);
+        }
     }
+
     //XF_LOG_DEBUG(0, 0, "check conn|%s|%d|%u|%s", m_itrCurCheckConn->second->RemoteAddrStr(), m_itrCurCheckConn->second->RemotePort(), m_itrCurCheckConn->first, CStrTool::TimeString(m_itrCurCheckConn->second->GetLastActTime()));
 
     time_t TineNow = time(NULL);
@@ -2037,6 +2039,25 @@ void CConn::MemFullCallBackAll(uint64_t UserID, ShmGnsInfo &CurGnsInfo, void* p)
 
 void CConn::MemFullCallBack(uint64_t UserID, ShmGnsInfo &CurGnsInfo, void* p)
 {
+    if(CurGnsInfo.ServerID == m_pSelf->GetServerID())
+    {
+        std::map<unsigned int, CConnInfo*>::iterator iter = m_pSelf->m_PosConnMap.find(CurGnsInfo.ConnPos);
+        if(CurGnsInfo.Status == GNS_USER_STATUS_ACTIVE)
+        {
+            if(iter == m_pSelf->m_PosConnMap.end() || iter->second->GetUserID() != UserID)
+            {
+                XF_LOG_ERROR(0, 0, "some error happen!!!Info:%ld, %d, %d, %ld", CurGnsInfo.UserID, CurGnsInfo.ServerID, CurGnsInfo.Status, CurGnsInfo.LastActiveTime);
+            }
+        }
+        else
+        {
+            if(iter != m_pSelf->m_PosConnMap.end() && iter->second->GetUserID() == UserID)
+            {
+                XF_LOG_ERROR(0, 0, "some error happen!!!Info:%ld, %d, %d, %ld", CurGnsInfo.UserID, CurGnsInfo.ServerID, CurGnsInfo.Status, CurGnsInfo.LastActiveTime);
+            }
+        }
+    }
+    
     time_t nowTime= time(NULL);
     if(CurGnsInfo.Status == GNS_USER_STATUS_UNACTIVE && (uint64_t)(nowTime - CONN_INVALID_TIME) > CurGnsInfo.LastActiveTime)
     {
