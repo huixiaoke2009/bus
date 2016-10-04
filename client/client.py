@@ -9,10 +9,12 @@ import app_pb2
 XY_PKG_MAX_LEN = 2048000;
 XY_HEADER_LEN = 17;
 PACKAGE_HEADER = ">IIIHHb";
+SERVER_HOST = '192.168.206.128';
+SERVER_PORT = 10000;
 
 class CClient:
-    HOST='192.168.206.128';
-    PORT=10000;
+    HOST=SERVER_HOST;
+    PORT=SERVER_PORT;
     UserID = 1472978293;
     Passwd = "12345";
     
@@ -126,11 +128,21 @@ class CClient:
         return 0;
     
 def main():
-    while True:
-        c = CClient('192.168.206.128', 10000);
-        c.Run();
-        time.sleep(2);
-
+    c1 = CClient(SERVER_HOST, SERVER_PORT);
+    c1.Run();
+    time.sleep(2);
+    c2 = CClient(SERVER_HOST, SERVER_PORT);
+    c2.Run();
+    time.sleep(2);
+    
+    c3 = CClient(SERVER_HOST, SERVER_PORT);
+    c3.Run();
+    time.sleep(2);
+    c4 = CClient(SERVER_HOST, SERVER_PORT);
+    c4.Run();
+    time.sleep(2);
+    
+    time.sleep(100000);
 
 if __name__ == "__main__":
     main()

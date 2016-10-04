@@ -2,7 +2,20 @@
 
 start()
 {
-    echo 'wait'
+    echo 'startup logsvr, wait ...'
+    cd logsvr;./logsvr ./conf/logsvr.ini;cd ..;
+    echo 'startup bus, wait ...'
+    cd bus;./bus ./conf/bus.ini;cd ..;
+    echo 'startup user, wait ...'
+    cd user;./user ./conf/user.ini;cd ..;
+    echo 'startup loader, wait ...'
+    cd user;./loader ./conf/loader.ini;cd ..;
+    echo 'startup writer, wait ...'
+    cd user;./writer ./conf/writer.ini;cd ..;
+    echo 'startup auth, wait ...'
+    cd auth;./auth ./conf/auth.ini;cd ..;
+    echo 'startup conn, wait ...'
+    cd conn;./conn ./conf/conn.ini;cd ..;
 }
 
 

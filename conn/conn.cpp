@@ -1768,7 +1768,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 else
                 {
                     // 这里要求两台服务器的时间要同步
-                    if(pCurGnsInfo->LastActiveTime < (uint64_t)_time)
+                    if(pCurGnsInfo->LastActiveTime <= (uint64_t)_time)
                     {
                         if(pCurGnsInfo->ServerID == GetServerID() && pCurGnsInfo->Status == GNS_USER_STATUS_ACTIVE)
                         {
@@ -1810,7 +1810,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 ShmGnsInfo* pCurGnsInfo = m_GnsInfoMap.Get(UserID);
                 if(pCurGnsInfo != NULL)
                 {
-                    if(pCurGnsInfo->LastActiveTime < (uint64_t)_time)
+                    if(pCurGnsInfo->LastActiveTime <= (uint64_t)_time)
                     {
                         if(pCurGnsInfo->ServerID == GetServerID() && pCurGnsInfo->Status == GNS_USER_STATUS_ACTIVE)
                         {
@@ -1930,7 +1930,7 @@ int CConn::DealPkg(const char *pCurBuffPos, int PkgLen)
                 else
                 {
                     // 这里要求两台服务器的时间要同步
-                    if(pCurGnsInfo->LastActiveTime < (uint64_t)_time)
+                    if(pCurGnsInfo->LastActiveTime <= (uint64_t)_time)
                     {
                         if(pCurGnsInfo->ServerID == GetServerID() && pCurGnsInfo->Status == GNS_USER_STATUS_ACTIVE)
                         {
